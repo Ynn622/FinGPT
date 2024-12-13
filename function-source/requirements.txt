@@ -1,0 +1,5 @@
+# Function dependencies, for example:
+# package>=version
+line-bot-sdk
+openai
+yahoo_fin
