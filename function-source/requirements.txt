@@ -3,3 +3,4 @@
 line-bot-sdk
 openai
 yahoo_fin
+beautifulsoup4
