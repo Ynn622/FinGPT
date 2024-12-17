@@ -10,6 +10,7 @@ import pandas as pd
 
 import requests
 from bs4 import BeautifulSoup as bs
+import time
 
 import os      # 設定環境變數用
 
@@ -52,7 +53,7 @@ def catch_Stock(stock):
 def catch_stock_name(stock_id):
     url = f"https://tw.stock.yahoo.com/quote/{stock_id}"
     web = requests.get(url)
-    name = bs(web.text).find_all("h1")[1].text
+    name = bs(web.text,'html.parser').find_all("h1")[1].text
     return name
 
 # 取得新聞資訊
@@ -61,19 +62,19 @@ def get_news(stock_id):
     url = f"https://ess.api.cnyes.com/ess/api/v1/news/keyword?q={stock_name}&limit=10&page=1"
     json_news = requests.get(url).json()['data']['items']
     
-    col = ["Title","Text"]
+    col = ["Date","Title","text"]
     data = []
     for item in json_news:
         id = item['newsId']  
         title = item['title']
-        t = item['publishAt']
-        #date = datetime.datetime.fromtimestamp(t, datetime.UTC).strftime("%Y/%m/%d")
+        t = item['publishAt']+28800
+        news_time = time.strftime("%Y/%m/%d", time.gmtime(t))
         news_url = f"https://news.cnyes.com/news/id/{id}"
         news = requests.get(news_url).text
-        news_bs = bs(news)
+        news_bs = bs(news,'html.parser')
         news_find = news_bs.find_all("p")[2:-9]
         news_data = "\n".join(x.text.strip() for x in news_find)
-        data.append([title,news_data])
+        data.append([news_time,title,news_data])
     
     df = pd.DataFrame(data,columns=col)
     df_str = df.to_string().replace("   ","")
@@ -95,11 +96,13 @@ def generate(input):
         response = talk(ai,talked)
         txt += response.choices[0].message.content
         txt = txt.replace("#","~")
+        print("Token Usage:",response.usage.total_tokens)
     except Exception as e:
         txt = "錯誤！請檢查代碼 或稍後再試～"
         print(e)
     return txt
 
+# LineBot 接收&傳送
 def linebot(request):
     try:
         access_token = os.environ["Line_token"]
