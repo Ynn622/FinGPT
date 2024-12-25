@@ -23,6 +23,47 @@ def talk(chatbot,record):
     )
     return response
 
+# 檢驗是否開盤
+def isOpen():
+    x = False
+    now = time.time()+28800
+    now_year = time.strftime("%Y", time.gmtime(now))
+    now_day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    now_time = time.strftime("%H:%M:%S", time.gmtime(now))
+    now_week = time.strftime("%w", time.gmtime(now))
+
+    # 爬取證交所 今年營業資訊
+    url = f"https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?date={now_year}0101&response=json&_=1735104108487"
+    web_json = requests.get(url).json()["data"]
+    closed = [i[0] for i in web_json]
+
+    if (now_week not in [6,7]) and (now_day not in closed):
+        if "13:30:05">now_time>"09:00:00":
+            x = True
+        else:
+            x = False
+    else:
+        x = False
+    return x
+
+# 取得台股即時報價
+def live_price(stock_id):
+    url = f"https://tw.stock.yahoo.com/quote/{stock_id}"
+    web = requests.get(url)
+    bs_web = bs(web.text,"html.parser")
+    table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
+    name = ["close","open","high","low","volume"]
+    n = 0
+    dic = {}
+    for i in [0,1,2,3,9]:
+        row = table[i].find_all("span")[1].text
+        dic[name[n]]=[row.replace(",","")]
+        n+=1
+    tt = bs_web.find("time").find_all("span")[2].text
+    tt = pd.to_datetime(tt).strftime("%Y-%m-%d")
+    df = pd.DataFrame(dic,index=[tt])
+    return df
+
 # 取得股價資料
 def catch_Stock(stock):
     for suffix in [".TW",".TWO",""]:
@@ -38,11 +79,16 @@ def catch_Stock(stock):
     del data["adjclose"]
     # data.index.name = "Date"
     data.index = data.index.strftime("%Y-%m-%d")
+    if isOpen():   # 開盤截取最新資料
+        live_df = live_price(stock)
+        data = data.drop(live_df.index[0], errors='ignore') 
+        data = pd.concat([data,live_df])
     data["5MA"]=data["close"].rolling(5).mean()
     data = data.dropna()
     if id[-3:]==".TW":
         data = data.drop("2024-11-20", errors='ignore')  # 「上市」資料異常
     return data, id
+
 
 # 取得股票名稱
 def catch_stock_name(stock_id):
@@ -71,6 +117,7 @@ def get_news(stock_id):
         for item in json_news:
             id = item['newsId']  
             title = item['title']
+            if "盤中速報" in title:continue
             t = item['publishAt']+28800
             news_time = time.strftime("%Y/%m/%d", time.gmtime(t))
             news_url = f"https://news.cnyes.com/news/id/{id}"
@@ -88,9 +135,10 @@ def get_news(stock_id):
 def generate(input):
     analysis = ""
     try:
+        news_data = get_news(input)
         stock_data, stock_id = catch_Stock(input)
-        news_data = get_news(stock_id)
-        analysis += f"日期：{stock_data.index[-1]} \n股票代號：{stock_id} \n開盤價：{stock_data.iloc[-1,0]} \n目前價格：{stock_data.iloc[-1,3]}\n\n"
+        show = "目前價格" if isOpen() else "收盤價"  # 判斷是否開盤
+        analysis += f"日期：{stock_data.index[-1]} \n股票代號：{stock_id} \n開盤價：{stock_data.iloc[-1,0]} \n{show}：{stock_data.iloc[-1,3]}\n\n"
         # 初始化ai設定
         key = os.environ["OpenAI_key"]
         ai = OpenAI(api_key=key)
