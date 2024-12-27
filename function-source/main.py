@@ -53,12 +53,14 @@ def live_price(stock_id):
     bs_web = bs(web.text,"html.parser")
     table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
     name = ["close","open","high","low","volume"]
-    n = 0
     dic = {}
-    for i in [0,1,2,3,9]:
-        row = table[i].find_all("span")[1].text
-        dic[name[n]]=[row.replace(",","")]
-        n+=1
+    s_list = [0,1,2,3,9] if stock_id!="TWII" else [0,1,2,3,5]  # 爬取的欄位
+    for i in range(5):
+        search = s_list[i]
+        row = table[search].find_all("span")[1].text
+        row = float(row.replace(",",""))
+        if search==5:row*=1000
+        dic[name[i]]=[row]
     tt = bs_web.find("time").find_all("span")[2].text
     tt = pd.to_datetime(tt).strftime("%Y-%m-%d")
     df = pd.DataFrame(dic,index=[tt])
@@ -79,14 +81,15 @@ def catch_Stock(stock):
     del data["adjclose"]
     # data.index.name = "Date"
     data.index = data.index.strftime("%Y-%m-%d")
-    if isOpen():   # 開盤截取最新資料
-        live_df = live_price(stock)
-        data = data.drop(live_df.index[0], errors='ignore') 
-        data = pd.concat([data,live_df])
+    # 取得最後更新資訊
+    live_df = live_price(stock)
+    data = data.drop(live_df.index[0], errors='ignore') 
+    data = pd.concat([data,live_df])
+
     data["5MA"]=data["close"].rolling(5).mean()
     data = data.dropna()
     if id[-3:]==".TW":
-        data = data.drop("2024-11-20", errors='ignore')  # 「上市」資料異常
+        data = data.drop("2024-11-20", errors='ignore')  # 資料異常
     return data, id
 
 
@@ -137,13 +140,17 @@ def generate(input):
     try:
         news_data = get_news(input)
         stock_data, stock_id = catch_Stock(input)
-        show = "目前價格" if isOpen() else "收盤價"  # 判斷是否開盤
-        analysis += f"日期：{stock_data.index[-1]} \n股票代號：{stock_id} \n開盤價：{stock_data.iloc[-1,0]} \n{show}：{stock_data.iloc[-1,3]}\n\n"
+        open = isOpen()
+        show = "目前價格" if open else "收盤價"  # 判斷是否開盤
+        TR = ((stock_data.iloc[-1,3]/stock_data.iloc[-2,3]-1)*100).round(2)
+        TRsymbol = "▲" if TR>=0 else "▼"
+        analysis += f"日期：{stock_data.index[-1]} \n股票代號：{stock_id} \n開盤價：{stock_data.iloc[-1,0]} \n{show}：{stock_data.iloc[-1,3]}({TRsymbol}{abs(TR)}%)\n\n"
         # 初始化ai設定
         key = os.environ["OpenAI_key"]
         ai = OpenAI(api_key=key)
         # 對話開始
-        talked = [{"role":"user","content":f"這是台股{stock_id}的資料\n{stock_data.to_string()} 以下是相關近期新聞可參考：{news_data} 請分析 並給出操作建議 Reply in 繁體中文"}]
+        send = f"這是台股{stock_id}的資料\n{stock_data.to_string()}，以下是相關近期新聞可參考：{news_data}，請分析 並給出操作建議 Reply in 繁體中文"
+        talked = [{"role":"user","content":send}]
         del stock_data
         response = talk(ai,talked)
         print("Token Usage:",response.usage.total_tokens)
