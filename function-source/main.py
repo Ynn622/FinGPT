@@ -54,7 +54,7 @@ def live_price(stock_id):
     table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
     name = ["close","open","high","low","volume"]
     dic = {}
-    s_list = [0,1,2,3,9] if stock_id!="TWII" else [0,1,2,3,5]  # 爬取的欄位
+    s_list = [0,1,2,3,9] if stock_id!="^TWII" else [0,1,2,3,5]  # 爬取的欄位
     for i in range(5):
         search = s_list[i]
         row = table[search].find_all("span")[1].text
@@ -85,6 +85,9 @@ def catch_Stock(stock):
     live_df = live_price(stock)
     data = data.drop(live_df.index[0], errors='ignore') 
     data = pd.concat([data,live_df])
+    # 大盤單位 改成億元
+    if id=="^TWII":
+        data["volume"] = data["volume"]*0.001
 
     data["5MA"]=data["close"].rolling(5).mean()
     data = data.dropna()
@@ -122,6 +125,7 @@ def get_news(stock_id):
             title = item['title']
             if "盤中速報" in title:continue
             t = item['publishAt']+28800
+            if time.mktime(time.gmtime())-2592000>t:continue
             news_time = time.strftime("%Y/%m/%d", time.gmtime(t))
             news_url = f"https://news.cnyes.com/news/id/{id}"
             news = requests.get(news_url).text
@@ -149,7 +153,8 @@ def generate(input):
         key = os.environ["OpenAI_key"]
         ai = OpenAI(api_key=key)
         # 對話開始
-        send = f"這是台股{stock_id}的資料\n{stock_data.to_string()}，以下是相關近期新聞可參考：{news_data}，請分析 並給出操作建議 Reply in 繁體中文"
+        unit = "volume單位:張" if input!="^TWII" else "volume單位:億元"
+        send = f"這是台股{stock_id}的資料\n{stock_data.to_string()} {unit}，以下是相關近期新聞可參考：{news_data}，請分析 並給出操作建議 Reply in 繁體中文"
         talked = [{"role":"user","content":send}]
         del stock_data
         response = talk(ai,talked)
