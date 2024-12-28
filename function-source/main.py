@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup as bs
 import time
 
 import os      # 設定環境變數用
+import traceback
 
 # OpenAI聊天
 def talk(chatbot,record):
@@ -27,17 +28,18 @@ def talk(chatbot,record):
 def isOpen():
     x = False
     now = time.time()+28800
-    now_year = time.strftime("%Y", time.gmtime(now))
-    now_day = time.strftime("%Y-%m-%d", time.gmtime(now))
-    now_time = time.strftime("%H:%M:%S", time.gmtime(now))
-    now_week = time.strftime("%w", time.gmtime(now))
+    gmt = time.gmtime(now)
+    now_year = time.strftime("%Y", gmt)
+    now_day = time.strftime("%Y-%m-%d", gmt)
+    now_time = time.strftime("%H:%M:%S", gmt)
+    now_week = time.strftime("%w", gmt)
 
     # 爬取證交所 今年營業資訊
     url = f"https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?date={now_year}0101&response=json&_=1735104108487"
     web_json = requests.get(url).json()["data"]
     closed = [i[0] for i in web_json]
 
-    if (now_week not in [6,7]) and (now_day not in closed):
+    if (now_week not in ["6","7"]) and (now_day not in closed):
         if "13:30:05">now_time>"09:00:00":
             x = True
         else:
@@ -48,22 +50,27 @@ def isOpen():
 
 # 取得台股即時報價
 def live_price(stock_id):
-    url = f"https://tw.stock.yahoo.com/quote/{stock_id}"
-    web = requests.get(url)
-    bs_web = bs(web.text,"html.parser")
-    table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
-    name = ["close","open","high","low","volume"]
-    dic = {}
-    s_list = [0,1,2,3,9] if stock_id!="^TWII" else [0,1,2,3,5]  # 爬取的欄位
-    for i in range(5):
-        search = s_list[i]
-        row = table[search].find_all("span")[1].text
-        row = float(row.replace(",",""))
-        if search==5:row*=1000
-        dic[name[i]]=[row]
-    tt = bs_web.find("time").find_all("span")[2].text
-    tt = pd.to_datetime(tt).strftime("%Y-%m-%d")
-    df = pd.DataFrame(dic,index=[tt])
+    try:
+        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
+        url = f"https://tw.stock.yahoo.com/quote/{stock_id}"
+        web = requests.get(url,headers=header)
+        bs_web = bs(web.text,"html.parser")
+        table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
+        name = ["close","open","high","low","volume"]
+        dic = {}
+        s_list = [0,1,2,3,9] if stock_id!="^TWII" else [0,1,2,3,5]  # 爬取的欄位
+        for i in range(5):
+            search = s_list[i]
+            row = table[search].find_all("span")[1].text
+            row = float(row.replace(",",""))
+            if search==5:row*=1000
+            dic[name[i]]=[row]
+        tt = bs_web.find("time").find_all("span")[2].text
+        tt = pd.to_datetime(tt).strftime("%Y-%m-%d")
+        df = pd.DataFrame(dic,index=[tt])
+    except Exception as e:
+        print("取得即時報價錯誤：",e)
+        df = pd.DataFrame()
     return df
 
 # 取得股價資料
@@ -83,8 +90,9 @@ def catch_Stock(stock):
     data.index = data.index.strftime("%Y-%m-%d")
     # 取得最後更新資訊
     live_df = live_price(stock)
-    data = data.drop(live_df.index[0], errors='ignore') 
-    data = pd.concat([data,live_df])
+    if not (live_df.empty):
+        data = data.drop(live_df.index[0], errors='ignore') 
+        data = pd.concat([data,live_df])
     # 大盤單位 改成億元
     if id=="^TWII":
         data["volume"] = data["volume"]*0.001
@@ -98,10 +106,15 @@ def catch_Stock(stock):
 
 # 取得股票名稱
 def catch_stock_name(stock_id):
-    url = f"https://tw.stock.yahoo.com/quote/{stock_id}"
-    web = requests.get(url)
-    name = bs(web.text,'html.parser').find_all("h1")[1].text
-    return name
+    try:
+        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
+        url = f"https://tw.stock.yahoo.com/quote/{stock_id}"
+        web = requests.get(url,headers=header,timeout=5)
+        name = bs(web.text,'html.parser').find_all("h1")[1].text
+        return name
+    except Exception as e:
+        print("抓取股名錯誤：",e)
+        return stock_id
 
 # 取得「新聞資訊」
 def get_news(stock_id):
@@ -139,11 +152,11 @@ def get_news(stock_id):
     return df_str
 
 # 生成
-def generate(input):
+def generate(id,question):
     analysis = ""
     try:
-        news_data = get_news(input)
-        stock_data, stock_id = catch_Stock(input)
+        news_data = get_news(id)
+        stock_data, stock_id = catch_Stock(id)
         open = isOpen()
         show = "目前價格" if open else "收盤價"  # 判斷是否開盤
         TR = ((stock_data.iloc[-1,3]/stock_data.iloc[-2,3]-1)*100).round(2)
@@ -153,9 +166,12 @@ def generate(input):
         key = os.environ["OpenAI_key"]
         ai = OpenAI(api_key=key)
         # 對話開始
-        unit = "volume單位:張" if input!="^TWII" else "volume單位:億元"
-        send = f"這是台股{stock_id}的資料\n{stock_data.to_string()} {unit}，以下是相關近期新聞可參考：{news_data}，請分析 並給出操作建議 Reply in 繁體中文"
-        talked = [{"role":"user","content":send}]
+        unit = "volume單位:張" if id!="^TWII" else "volume單位:億元"
+        question = question or "請分析 並給出操作建議"
+        talked = [{"role":"assistant","content":f"你是一名股市分析師"},
+                  {"role":"user","content":f"這是台股{stock_id}的資料\n{stock_data.to_string()} {unit},以下是相關近期新聞 可參考：{news_data}"},
+                  {"role":"user","content":f"{question} Reply in 繁體中文"}
+                 ]
         del stock_data
         response = talk(ai,talked)
         print("Token Usage:",response.usage.total_tokens)
@@ -163,7 +179,7 @@ def generate(input):
         analysis = analysis.replace("#","~")
     except Exception as e:
         analysis = "錯誤！請檢查代碼 或稍後再試～"
-        print(e)
+        print(traceback.format_exc())
     return analysis
 
 # LineBot 接收&傳送
@@ -179,7 +195,11 @@ def linebot(request):
         handler.handle(body, signature)
         msg = json_data['events'][0]['message']['text']
         tk = json_data['events'][0]['replyToken']
-        ans = generate(msg)
+        send = msg.replace(" ","\n").split("\n")
+        send = list(filter(None,send))  # 去除空格
+        symbol = send[0]
+        user_question = ",".join(s for s in send[1:])
+        ans = generate(symbol,user_question)
         line_bot_api.reply_message(tk,TextSendMessage(ans))
         print(msg, tk)
     except:
