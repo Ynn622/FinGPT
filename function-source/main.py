@@ -53,7 +53,7 @@ def live_price(stock_id):
     try:
         header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
         url = f"https://tw.stock.yahoo.com/quote/{stock_id}"
-        web = requests.get(url,headers=header)
+        web = requests.get(url,headers=header,timeout=5)
         bs_web = bs(web.text,"html.parser")
         table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
         name = ["close","open","high","low","volume"]
