@@ -84,7 +84,7 @@ def catch_Stock(stock):
             break
         except:
             continue
-    data = data.round(2).iloc[-25:,:6]
+    data = data.round(2).iloc[-100:,:6]
     del data["adjclose"]
     # data.index.name = "Date"
     data.index = data.index.strftime("%Y-%m-%d")
@@ -98,7 +98,10 @@ def catch_Stock(stock):
         data["volume"] = data["volume"]*0.001
 
     data["5MA"]=data["close"].rolling(5).mean()
+    data["10MA"]=data["close"].rolling(10).mean()
+    data["60MA"]=data["close"].rolling(60).mean()
     data = data.dropna()
+    data = data.round(2)
     if id[-3:]==".TW":
         data = data.drop("2024-11-20", errors='ignore')  # 資料異常
     return data, id
@@ -167,10 +170,10 @@ def generate(id,question):
         ai = OpenAI(api_key=key)
         # 對話開始
         unit = "volume單位:張" if id!="^TWII" else "volume單位:億元"
-        question = question or "請分析 並給出操作建議"
+        question = question or "請分析後 給出操作建議或價位"
         talked = [{"role":"assistant","content":f"你是一名股市分析師"},
-                  {"role":"user","content":f"這是台股{stock_id}的資料\n{stock_data.to_string()} {unit},以下是相關近期新聞 可參考：{news_data}"},
-                  {"role":"user","content":f"{question} Reply in 繁體中文"}
+                  {"role":"user","content":f"這是台股{stock_id}的資料\n{stock_data.to_string()} {unit},以下是相關近期新聞 可參考：{news_data}，請分析"},
+                  {"role":"user","content":f"{question} (Reply in 繁體中文)"}
                  ]
         del stock_data
         response = talk(ai,talked)
