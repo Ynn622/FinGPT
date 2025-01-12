@@ -127,7 +127,9 @@ def get_news(stock_id):
         url = f"https://api.cnyes.com/media/api/v1/newslist/category/tw_stock_news?page=1&limit=10&isCategoryHeadline=1"
         json_news = requests.get(url).json()['items']['data']
         for i in range(10):
-            content = json_news[i]["content"].replace("&lt;p&gt;","").replace("&lt;/p&gt;","").replace("&nbsp;","").replace("\n\n","\n")
+            content = json_news[i]["content"].replace("&lt;p&gt;","").replace("&lt;","").replace("&nbsp;","").replace("\n\n","\n")
+            if content.find("http")!=-1:
+                content = content[:content.find("http")]
             summary = json_news[i]["summary"]
             t = json_news[i]["publishAt"]+28800
             news_time = time.strftime("%Y/%m/%d", time.gmtime(t))
@@ -146,8 +148,15 @@ def get_news(stock_id):
             news_url = f"https://news.cnyes.com/news/id/{id}"
             news = requests.get(news_url).text
             news_bs = bs(news,'html.parser')
-            news_find = news_bs.find_all("p")[2:-9]
+            news_find = news_bs.find("main",class_="c1tt5pk2")
             news_data = "\n".join(x.text.strip() for x in news_find)
+            news_data = news_data.replace("　　　","").replace("\n\n","")
+            delete_strings = ["歡迎免費訂閱", "精彩影片","粉絲團", "Line ID","Line@","來源："]
+            for delete_str in delete_strings:
+                index = news_data.find(delete_str)
+                if index != -1:
+                    news_data = news_data[:index]  # 只保留不包含該字串的部分
+                    break
             data.append([news_time,title,news_data])
         
     df = pd.DataFrame(data,columns=col)
