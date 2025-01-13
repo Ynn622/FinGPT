@@ -11,6 +11,8 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup as bs
 import time
+import re
+import html
 
 import os      # 設定環境變數用
 import traceback
@@ -127,7 +129,8 @@ def get_news(stock_id):
         url = f"https://api.cnyes.com/media/api/v1/newslist/category/tw_stock_news?page=1&limit=10&isCategoryHeadline=1"
         json_news = requests.get(url).json()['items']['data']
         for i in range(10):
-            content = json_news[i]["content"].replace("&lt;p&gt;","").replace("&lt;","").replace("&nbsp;","").replace("\n\n","\n")
+            content = json_news[i]["content"]
+            content = re.sub(r'<.*?>', '', html.unescape(content))
             if content.find("http")!=-1:
                 content = content[:content.find("http")]
             summary = json_news[i]["summary"]
@@ -141,6 +144,7 @@ def get_news(stock_id):
         for item in json_news:
             id = item['newsId']  
             title = item['title']
+            title = re.sub(r'<.*?>', '', title)
             if "盤中速報" in title:continue
             t = item['publishAt']+28800
             if time.mktime(time.gmtime())-2592000>t:continue
@@ -179,9 +183,9 @@ def generate(id,question):
         ai = OpenAI(api_key=key)
         # 對話開始
         unit = "volume單位:張" if id!="^TWII" else "volume單位:億元"
-        question = question or "請分析後 給出操作建議或價位"
-        talked = [{"role":"assistant","content":f"你是一名股市分析師"},
-                  {"role":"user","content":f"這是台股{stock_id}的資料\n{stock_data.to_string()} {unit},以下是相關近期新聞 可參考：{news_data}，請分析"},
+        question = question or "請分析後 給出未來操作建議或價位"
+        talked = [{"role":"assistant","content":f"你是一名股市分析師,今日是{stock_data.index[-1]}"},
+                  {"role":"user","content":f"這是台股{stock_id}的資料\n{stock_data} {unit},以下是相關近期新聞 可參考：{news_data}，請分析"},
                   {"role":"user","content":f"{question} (Reply in 繁體中文)"}
                  ]
         del stock_data
