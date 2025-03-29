@@ -1,5 +1,5 @@
 from openai import OpenAI
-from yahoo_fin.stock_info import *
+import yfinance as yf
 import pandas as pd
 
 import requests
@@ -53,7 +53,7 @@ def live_price(stock_id):
         web = requests.get(url,headers=header,timeout=5)
         bs_web = bs(web.text,"html.parser")
         table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
-        name = ["close","open","high","low","volume"]
+        name = ["Close","Open","High","Low","Volume"]
         dic = {}
         s_list = [0,1,2,3,9] if stock_id!="^TWII" else [0,1,2,3,5]  # 爬取的欄位
         for i in range(5):
@@ -73,16 +73,17 @@ def live_price(stock_id):
 # 取得股價資料
 def catch_Stock(stock):
     for suffix in [".TW",".TWO",""]:
+        id = f'{stock}{suffix}'
         try:
-            id = f'{stock}{suffix}'
-            data = get_data(id)
+            data = yf.Ticker(id).history(period="6mo")
             if suffix!="":
-                data["volume"]=data["volume"]*0.001
+                data["Volume"]=data["Volume"]*0.001
             break
-        except:
+        except Exception as stock_Error:
             continue
-    data = data.round(2).iloc[-100:,:6]
-    del data["adjclose"]
+    del data["Dividends"]
+    del data["Stock Splits"]
+    data = data.round(2).iloc[-100:,:6].dropna()
     # data.index.name = "Date"
     data.index = data.index.strftime("%Y-%m-%d")
     # 取得最後更新資訊
@@ -92,17 +93,16 @@ def catch_Stock(stock):
         data = pd.concat([data,live_df])
     # 大盤單位 改成億元
     if id=="^TWII":
-        data["volume"] = data["volume"]*0.001
+        data["Volume"] = data["Volume"]*0.001
 
-    data["5MA"]=data["close"].rolling(5).mean()
-    data["10MA"]=data["close"].rolling(10).mean()
-    data["60MA"]=data["close"].rolling(60).mean()
-    data = data.dropna()
-    data = data.round(2)
+    data["5MA"]=data["Close"].rolling(5).mean()
+    data["10MA"]=data["Close"].rolling(10).mean()
+    data["60MA"]=data["Close"].rolling(60).mean()
+    data = data.dropna().round(2)
     if id[-3:]==".TW":
         data = data.drop("2024-11-20", errors='ignore')  # 資料異常
+    print(data.tail(2))
     return data, id
-
 
 # 取得股票名稱
 def catch_stock_name(stock_id):
@@ -114,6 +114,7 @@ def catch_stock_name(stock_id):
         return name
     except Exception as e:
         print("抓取股名錯誤：",e)
+        print("發生錯誤",traceback.format_exc())
         return stock_id
 
 # 取得「新聞資訊」
@@ -193,5 +194,6 @@ def generate(id,question):
         analysis = analysis.replace("#","~")
     except Exception as e:
         analysis = "錯誤！請檢查代碼 或稍後再試～"
+        LineColTemp = []
         print(traceback.format_exc())
     return analysis,LineColTemp
