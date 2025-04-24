@@ -15,7 +15,7 @@ from LineTemplate import *   # LineTemplate.py
 # OpenAI聊天
 def talk(chatbot,record):
     response = chatbot.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4.1-nano",
         messages=record,
         max_tokens = 16000
     )
@@ -30,20 +30,22 @@ def isOpen():
     now_day = time.strftime("%Y-%m-%d", gmt)
     now_time = time.strftime("%H:%M:%S", gmt)
     now_week = time.strftime("%w", gmt)
+    try:
+        # 爬取證交所 今年營業資訊
+        url = f"https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?date={now_year}0101&response=json&_=1735104108487"
+        web_json = requests.get(url).json()["data"]
+        closed = [i[0] for i in web_json]
 
-    # 爬取證交所 今年營業資訊
-    url = f"https://www.twse.com.tw/rwd/zh/holidaySchedule/holidaySchedule?date={now_year}0101&response=json&_=1735104108487"
-    web_json = requests.get(url).json()["data"]
-    closed = [i[0] for i in web_json]
-
-    if (now_week not in ["6","7"]) and (now_day not in closed):
-        if "13:30:05">now_time>"09:00:00":
-            x = True
+        if (now_week not in ["6","7"]) and (now_day not in closed):
+            if "13:30:05">now_time>"09:00:00":
+                x = True
+            else:
+                x = False
         else:
             x = False
-    else:
-        x = False
-    return x
+        return x
+    except:
+        return False
 
 # 取得台股即時報價
 def live_price(stock_id):
@@ -76,6 +78,7 @@ def catch_Stock(stock):
         id = f'{stock}{suffix}'
         try:
             data = yf.Ticker(id).history(period="6mo")
+            if data.empty: continue
             if suffix!="":
                 data["Volume"]=data["Volume"]*0.001
             break
