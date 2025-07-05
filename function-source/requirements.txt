@@ -1,5 +1,0 @@
-functions-framework==3.*
-line-bot-sdk
-openai
-yfinance
-beautifulsoup4
