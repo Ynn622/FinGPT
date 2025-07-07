@@ -9,6 +9,8 @@ import time
 import yfinance as yf
 import cloudscraper
 
+from TA import EMA, cal_RSI, cal_KD, cal_MACD
+
 @function_tool
 async def get_current_time() -> str:
     """
@@ -20,15 +22,15 @@ async def get_current_time() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 @function_tool
-async def fetch_stockID(stockName: str) -> str:
+async def fetch_stock(stockName: str) -> str:
     """
-    根據股票名稱查詢其對應的股票代號。
+    股票代號&名稱查詢。
     Args:
-        stockName (str): 股票名稱，例如 "鴻海"
+        stockName (str): 股票名稱或代碼，例如 "鴻海" 或 "2317"。
     Returns:
-        str: 股票的代號，例如 "2317.TW"。
+        str: 包含股票代號與名稱的字串。
     Example:
-        fetch_stockID("鴻海") -> "2317.TW"
+        fetch_stockID("鴻海") -> ('2317.TW','鴻海')
     """
     print(f"  -function_call: 調用 fetch_stockID({stockName})")
     try:
@@ -36,52 +38,72 @@ async def fetch_stockID(stockName: str) -> str:
         url = f"https://tw.stock.yahoo.com/_td-stock/api/resource/WaferAutocompleteService;view=wafer&query={stockName}"
         response = requests.get(url)
         stockID = bs(response.json()["html"], features="lxml").find("a")["href"].split('stock_id=')[1]
-        return stockID
+        stockName = bs(response.json()["html"], features="lxml").find("span").text
+        return stockID, stockName
     except Exception as e:
         print(f"   Error: fetch_stockID({stockName}): {str(e)}")
         return f"Error fetching data for {stockName}!"
 
 @function_tool
-async def get_stock_price(symbol: str, period: str, chip: bool=True) -> str:
+async def get_stock_price(symbol: str, start: str, MA_list: list[int]=[], EMA_list: list[int]=[],RSI_List: list[int]=[], KD:bool = False, MACD:bool = False) -> str:
     """
     抓取 Yahoo Finance 的歷史股價資料與籌碼面資料。
     指數代號：（成交量單位為「億元」）
         - 加權指數：使用 "^TWII"
         - 櫃買指數：使用 "^TWOII"
-    若不需籌碼資料，請將 `chip` 設為 False（指數不提供籌碼資料）。
     Args:
         symbol (str): 股票代號，例如 "2330.TW" 或 "2317.TW"。
-        period (str): 查詢歷史股價的期間。可接受值："1d", "5d", "1mo", "3mo", "6mo", "1y", "ytd"。如果沒有符合的時間，請使用更長的時間範圍。
-        chip (bool): 是否抓取籌碼面資料，預設為 True。
+        start (str): 開始日期（格式："YYYY-MM-DD"），將只返回此日期之後的資料。
+        MA_list (list): 欲計算的移動平均線（MA）期數清單，例如 [5, 10]。
+        EMA_list (list): 欲計算的指數移動平均線（EMA）期數清單，例如 [5, 10]。
+        RSI_List (list): 欲計算的 RSI 指標期數清單，例如 [6, 14]。
+        KD (bool): 是否計算 KD 指標。預設為 False。
+        MACD (bool): 是否計算 MACD 指標。預設為 False。
     Returns:
         str: 資料表格的字串格式。
     Example:
         get_stock_price("2330.TW", "1mo")
+        get_stock_price("2330.TW", "2024-01-01", MA_list=[5], EMA_list=[5,10], RSI_List=[6], KD=True, MACD=True)
     """
-    print(f"  -function_call: 調用 get_stock_price({symbol}, {period}, {chip})")
+    print(f"  -function_call: 調用 get_stock_price({symbol}, {start}, MA_list={MA_list}, EMA_list={EMA_list}, RSI_List={RSI_List}, KD={KD}, MACD={MACD})")
     try:
-        data = yf.Ticker(symbol).history(period=period).round(2)
+        data = yf.Ticker(symbol).history(period="2y").round(2)
         del data["Dividends"], data["Stock Splits"]
         if "Capital Gains" in data.columns: del data["Capital Gains"]
         data.index = data.index.strftime("%Y-%m-%d")
         data["Volume"] = data["Volume"]*0.001  # 將成交量轉換為張數
         
-        live_df = get_live_price(symbol)   # 爬取現在即時股價資料
+        # 爬取現在即時股價資料
+        live_df = get_live_price(symbol)
         if not live_df.empty:
             data = data.drop(live_df.index[0], errors='ignore') 
             data = pd.concat([data,live_df])
-        # 大盤單位 改成億元
-        if id=="^TWII": data["Volume"] = data["Volume"]*0.001
+        
+        # 指標計算
+        if len(MA_list):
+            for ma in MA_list:
+                data[f'MA_{ma}T'] = data["Close"].rolling(window=ma).mean()
+        if len(EMA_list):
+            for ema in EMA_list:
+                data[f'EMA_{ema}T'] = EMA(data, period=ema)  # 計算 EMA 指標
+        if len(RSI_List):
+            for period in RSI_List:
+                data[f'RSI_{period}T'] = cal_RSI(data, period=period)  # 計算 RSI 指標
+        if KD: data['K'], data['D'] = cal_KD(data)
+        if MACD: data['DIF'], data['MACD'], data['OSC'] = cal_MACD(data)  # 計算 MACD 指標
+        data = data[data.index >= start]  # 確保資料從指定日期開始
         
         # 籌碼面資料
-        if chip: 
+        if symbol not in ("^TWII", "^TWOII"): 
             chip_data = get_chip_data(symbol,data.index[0],data.index[-1])
             if not chip_data.empty:
                 chip_data.index = data.index
                 data = pd.concat([data, chip_data], axis=1)
-        return data.to_string()  # 返回 DataFrame 的字串表示
+        
+        data = data.dropna().round(2)  # 移除包含NaN的行 
+        return data.to_string()
     except Exception as e:
-        print(f"   Error: get_stock_price({symbol}, {period}): {str(e)}")
+        print(f"   Error: get_stock_price({symbol}, {start}): {str(e)}")
         return f"Error fetching data for {symbol}!"
 
 def get_live_price(symbol: str) -> pd.DataFrame:
@@ -126,16 +148,20 @@ def get_chip_data(symbol: str, start: str, end: str) -> pd.DataFrame:
         col = ["外資", "投信", "自營商", "三大法人合計"]
         data = []
         for i in bs_table[::-1]: # 反向遍歷，因為最新的資料在最後一行
-            row = []
-            for j in i.find_all("td")[1:5]:
-                row.append(int(j.text.replace(",", "")))
+            tds = i.find_all("td")[1:5]
+            texts = [td.text.strip() for td in tds]
+            # 偵測是否有 '--'
+            if any(text == '--' for text in texts):
+                continue  # 不繼續處理這筆資料
+            # 正常處理數字
+            row = [int(text.replace(",", "")) for text in texts]
             data.append(row)
         df = pd.DataFrame(data, columns=col)
         return df
     except Exception as e:
         print(f"   Error: get_chip_data({symbol}): {str(e)}")
         return pd.DataFrame()
-    
+        
 @function_tool
 async def fetch_stock_news(stock_name: str) -> str:
     """
@@ -212,3 +238,25 @@ async def fetch_twii_news() -> str:
     except Exception as e:
         print(f"   Error: fetch_twii_news(): {str(e)}")
         return f"Error fetching TWII news"
+
+@function_tool
+async def ETF_Ingredients(ETF_name: str) -> str:
+    """
+    查詢 ETF 的成分股。
+    Args:
+        ETF_name (str): ETF 名稱，例如 "0050" 或 "00878"。
+    Returns:
+        pd.DataFrame: 包含成分股的 DataFrame，包含股票代號、名稱、權重等資訊。
+    """
+    try:
+        url = f"https://tw.stock.yahoo.com/quote/{ETF_name}/holding"
+        response = requests.get(url)
+        soup = bs(response.text, "html.parser")
+        table = soup.find_all("ul", class_="Bxz(bb) Bgc($c-light-gray) Bdrs(8px) P(20px)")[1].find_all("li")[1:]
+        data = ""
+        for i in table:
+            data += i.text.strip() + "\n"
+        return data
+    except Exception as e:
+        print(f"   Error: ETF_Ingredients({ETF_name}): {str(e)}")
+        return f"Error fetching ETF ingredients for {ETF_name}"
