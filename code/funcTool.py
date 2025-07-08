@@ -8,6 +8,7 @@ import html
 import time
 import yfinance as yf
 import cloudscraper
+import numpy as np
 
 from TA import EMA, cal_RSI, cal_KD, cal_MACD
 
@@ -82,25 +83,27 @@ async def get_stock_price(symbol: str, start: str, MA_list: list[int]=[], EMA_li
         # 指標計算
         if len(MA_list):
             for ma in MA_list:
-                data[f'MA_{ma}T'] = data["Close"].rolling(window=ma).mean()
+                data[f'{ma}MA'] = data["Close"].rolling(window=ma).mean()
         if len(EMA_list):
             for ema in EMA_list:
-                data[f'EMA_{ema}T'] = EMA(data, period=ema)  # 計算 EMA 指標
+                data[f'{ema}EMA'] = EMA(data, period=ema)  # 計算 EMA 指標
         if len(RSI_List):
             for period in RSI_List:
-                data[f'RSI_{period}T'] = cal_RSI(data, period=period)  # 計算 RSI 指標
+                data[f'{period}RSI'] = cal_RSI(data, period=period)  # 計算 RSI 指標
         if KD: data['K'], data['D'] = cal_KD(data)
         if MACD: data['DIF'], data['MACD'], data['OSC'] = cal_MACD(data)  # 計算 MACD 指標
         data = data[data.index >= start]  # 確保資料從指定日期開始
+        data = data.dropna().round(2)  # 移除包含NaN的行 
         
         # 籌碼面資料
         if symbol not in ("^TWII", "^TWOII"): 
             chip_data = get_chip_data(symbol,data.index[0],data.index[-1])
             if not chip_data.empty:
+                if len(chip_data)+1==len(data):
+                    chip_data.loc[len(chip_data)] = [np.nan] * len(chip_data.columns)
                 chip_data.index = data.index
                 data = pd.concat([data, chip_data], axis=1)
         
-        data = data.dropna().round(2)  # 移除包含NaN的行 
         return data.to_string()
     except Exception as e:
         print(f"   Error: get_stock_price({symbol}, {start}): {str(e)}")

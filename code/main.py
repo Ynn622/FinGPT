@@ -24,7 +24,7 @@ async def main(question):
         instructions="你是一名台灣股票分析師，請使用提供的工具，分析股票並給予投資建議。",
         tools=[get_current_time, fetch_stock, get_stock_price, fetch_stock_news, fetch_twii_news, ETF_Ingredients],
     )
-    result = await Runner.run(agent, question+"（1.如果查無資料，可嘗試使用工具查詢代碼\n 2.若未提及需要分析的時間，預設的分析時間為一個月，請先查詢今日日期\n 3.若無特別提及技術指標，請使用5MA即可）")    
+    result = await Runner.run(agent, question+"（1.如果查無資料，可嘗試使用工具查詢代碼\n 2.若未提及需要分析的時間，預設的分析時間為一個月，請先查詢今日日期\n 3.若無特別提及分析面向，請查詢股價&新聞\n4.若無特別提及技術指標，請使用5&10MA）")    
     #print("Agent:",result.final_output)
     return result.final_output
 
