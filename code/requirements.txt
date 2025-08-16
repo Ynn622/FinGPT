@@ -5,3 +5,4 @@ yfinance
 beautifulsoup4
 lxml
 cloudscraper
+stockstats

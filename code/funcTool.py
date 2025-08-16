@@ -7,10 +7,9 @@ import re
 import html
 import time
 import yfinance as yf
-import cloudscraper
 import numpy as np
 
-from TA import EMA, cal_RSI, cal_KD, cal_MACD
+from supportFunc import *
 
 @function_tool
 async def get_current_time() -> str:
@@ -46,27 +45,24 @@ async def fetch_stock(stockName: str) -> str:
         return f"Error fetching data for {stockName}!"
 
 @function_tool
-async def get_stock_price(symbol: str, start: str, MA_list: list[int]=[], EMA_list: list[int]=[],RSI_List: list[int]=[], KD:bool = False, MACD:bool = False) -> str:
+async def get_stock_price(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) -> str:
     """
     抓取 Yahoo Finance 的歷史股價資料與籌碼面資料。
     指數代號：（成交量單位為「億元」）
         - 加權指數：使用 "^TWII"
         - 櫃買指數：使用 "^TWOII"
+    週線=5MA、月線=20MA、季線=60MA、半年線=120MA、年線=240MA
     Args:
         symbol (str): 股票代號，例如 "2330.TW" 或 "2317.TW"。
         start (str): 開始日期（格式："YYYY-MM-DD"），將只返回此日期之後的資料。
-        MA_list (list): 欲計算的移動平均線（MA）期數清單，例如 [5, 10]。
-        EMA_list (list): 欲計算的指數移動平均線（EMA）期數清單，例如 [5, 10]。
-        RSI_List (list): 欲計算的 RSI 指標期數清單，例如 [6, 14]。
-        KD (bool): 是否計算 KD 指標。預設為 False。
-        MACD (bool): 是否計算 MACD 指標。預設為 False。
+        sdf_indicator_list (list[str]): 欲計算的技術指標清單，stockstats - StockDataFrame 的指標名稱。
     Returns:
         str: 資料表格的字串格式。
     Example:
         get_stock_price("2330.TW", "1mo")
-        get_stock_price("2330.TW", "2024-01-01", MA_list=[5], EMA_list=[5,10], RSI_List=[6], KD=True, MACD=True)
+        get_stock_price("2330.TW", "2024-01-01", sdf_indicator_list=["close_5_sma", "close_10_ema", "macd", "kdjk", "kdjd", "rsi_5", "rsi_10"])
     """
-    print(f"  -function_call: 調用 get_stock_price({symbol}, {start}, MA_list={MA_list}, EMA_list={EMA_list}, RSI_List={RSI_List}, KD={KD}, MACD={MACD})")
+    print(f"  -function_call: 調用 get_stock_price({symbol}, {start}, sdf_indicator_list: {sdf_indicator_list}")
     try:
         data = yf.Ticker(symbol).history(period="2y").round(2)
         del data["Dividends"], data["Stock Splits"]
@@ -81,26 +77,24 @@ async def get_stock_price(symbol: str, start: str, MA_list: list[int]=[], EMA_li
             data = pd.concat([data,live_df])
         
         # 指標計算
-        if len(MA_list):
-            for ma in MA_list:
-                data[f'{ma}MA'] = data["Close"].rolling(window=ma).mean()
-        if len(EMA_list):
-            for ema in EMA_list:
-                data[f'{ema}EMA'] = EMA(data, period=ema)  # 計算 EMA 指標
-        if len(RSI_List):
-            for period in RSI_List:
-                data[f'{period}RSI'] = cal_RSI(data, period=period)  # 計算 RSI 指標
-        if KD: data['K'], data['D'] = cal_KD(data)
-        if MACD: data['DIF'], data['MACD'], data['OSC'] = cal_MACD(data)  # 計算 MACD 指標
+        if sdf_indicator_list:
+            indicator_df = get_technical_indicators(data, sdf_indicator_list)
+            try:
+                data = pd.concat([data, indicator_df], axis=1)
+            except Exception as e:
+                print(f"   Error: 指標計算錯誤: {str(e)}")
+
+        half_year_ago = (datetime.today() - timedelta(days=180)).strftime("%Y-%m-%d")
+        start = start if start < half_year_ago else half_year_ago   # 最多取半年
         data = data[data.index >= start]  # 確保資料從指定日期開始
         data = data.dropna().round(2)  # 移除包含NaN的行 
         
         # yfinance 資料異常
         date_to_add = "2025-08-01"
-        if date_to_add not in data.index:
+        if (date_to_add not in data.index) and (start < date_to_add):
             data.loc[date_to_add] = [np.nan] * len(data.columns)
             data = data.sort_index()
-
+        
         # 籌碼面資料
         if symbol not in ("^TWII", "^TWOII"): 
             chip_data = get_chip_data(symbol,data.index[0],data.index[-1])
@@ -114,62 +108,6 @@ async def get_stock_price(symbol: str, start: str, MA_list: list[int]=[], EMA_li
     except Exception as e:
         print(f"   Error: get_stock_price({symbol}, {start}): {str(e)}")
         return f"Error fetching data for {symbol}!"
-
-def get_live_price(symbol: str) -> pd.DataFrame:
-    """
-    用於取得最新即時股價資料。
-    get_stock_price() 會自動調用此函數。
-    """
-    try:
-        header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
-        url = f"https://tw.stock.yahoo.com/quote/{symbol}"
-        web = requests.get(url,headers=header,timeout=5)
-        bs_web = bs(web.text,"html.parser")
-        table = bs_web.find("ul",class_="D(f) Fld(c) Flw(w) H(192px) Mx(-16px)").find_all("li")
-        name = ["Close","Open","High","Low","Volume"]
-        dic = {}
-        s_list = [0,1,2,3,5 if symbol in ("^TWII", "^TWOII") else 9]  # 大盤&櫃買 抓取欄位不同
-        for i in range(5):
-            search = s_list[i]
-            row = float(table[search].find_all("span")[1].text.replace(",",""))
-            dic[name[i]]=[row]
-        nowtime = bs_web.find("time").find_all("span")[2].text
-        nowtime = pd.to_datetime(nowtime).strftime("%Y-%m-%d")
-        return pd.DataFrame(dic,index=[nowtime])
-    except Exception as e:
-        print(f"   Error: get_live_price({symbol}): {str(e)}")
-        return pd.DataFrame()  # 返回空的 DataFrame
-    
-def get_chip_data(symbol: str, start: str, end: str) -> pd.DataFrame:
-    """
-    用於取得最新籌碼面資料。
-    get_stock_price() 會自動調用此函數。
-    """
-    if symbol in ("^TWII", "^TWOII"):
-        print(f"  -function_call: 不提供籌碼面資料: {symbol}")
-        return pd.DataFrame()
-    try:
-        symbol = symbol.split(".")[0]  # 去除後綴
-        url = f"https://fubon-ebrokerdj.fbs.com.tw/z/zc/zcl/zcl.djhtm?a={symbol}&c={start}&d={end}"
-        scraper = cloudscraper.create_scraper()  # 使用 cloudscraper 爬取
-        web = scraper.get(url).text
-        bs_table = bs(web, "html.parser").find("table", class_="t01").find_all("tr")[7:-1]  # 跳過前7行和最後一行
-        col = ["外資", "投信", "自營商", "三大法人合計"]
-        data = []
-        for i in bs_table[::-1]: # 反向遍歷，因為最新的資料在最後一行
-            tds = i.find_all("td")[1:5]
-            texts = [td.text.strip() for td in tds]
-            # 偵測是否有 '--'
-            if any(text == '--' for text in texts):
-                continue  # 不繼續處理這筆資料
-            # 正常處理數字
-            row = [int(text.replace(",", "")) for text in texts]
-            data.append(row)
-        df = pd.DataFrame(data, columns=col)
-        return df
-    except Exception as e:
-        print(f"   Error: get_chip_data({symbol}): {str(e)}")
-        return pd.DataFrame()
         
 @function_tool
 async def fetch_stock_news(stock_name: str) -> str:
