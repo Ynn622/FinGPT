@@ -95,6 +95,12 @@ async def get_stock_price(symbol: str, start: str, MA_list: list[int]=[], EMA_li
         data = data[data.index >= start]  # 確保資料從指定日期開始
         data = data.dropna().round(2)  # 移除包含NaN的行 
         
+        # yfinance 資料異常
+        date_to_add = "2025-08-01"
+        if date_to_add not in data.index:
+            data.loc[date_to_add] = [np.nan] * len(data.columns)
+            data = data.sort_index()
+
         # 籌碼面資料
         if symbol not in ("^TWII", "^TWOII"): 
             chip_data = get_chip_data(symbol,data.index[0],data.index[-1])
