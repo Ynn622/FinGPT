@@ -8,46 +8,33 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage
 )
-from agents import Agent, Runner, function_tool
 import asyncio
-import os      # 設定環境變數用
 import traceback
 import json
+import os
 
-# 引入自定義工具函數
-from funcTool import get_current_time, fetch_stock, get_stock_price, fetch_stock_news, fetch_twii_news, ETF_Ingredients
-
-async def main(question):
-    agent = Agent(
-        name="Finance Agent",
-        model="gpt-4.1-mini",
-        instructions="你是一名台灣股票分析師，請使用提供的工具，分析股票各面向並給予操作方向＆價位建議。（1.如果查無資料，可嘗試使用工具查詢代碼\n 2.若未提及需要分析的時間&技術指標時，預設為一個月且使用5&10MA，請先查詢今日日期\n 3.若無特別提及分析面向，請查詢股價&新聞）\n4.用簡單、完整又有禮貌的方式回答問題",
-        tools=[get_current_time, fetch_stock, get_stock_price, fetch_stock_news, fetch_twii_news, ETF_Ingredients],
-    )
-    result = await Runner.run(agent, question)
-    #print("Agent:",result.final_output)
-    return result.final_output
-
+from functionTools import askAI   # 引入自定義工具函數
 
 # LineBot 接收&傳送
 def linebot(request):
     body = request.get_data(as_text=True)
     try:
-        access_token = os.environ["Line_token"]
-        secret = os.environ["Line_secret"]
-        json_data = json.loads(body)   # json格式 資料
-        messaging_api = MessagingApi(ApiClient(Configuration(access_token=access_token)))  # 確認 token 是否正確
-        handler = WebhookHandler(secret)                     # 確認 secret 是否正確
+        lineToken = os.environ["Line_token"]
+        lineSecret = os.environ["Line_secret"]
+        json_data = json.loads(body)
+        messaging_api = MessagingApi(ApiClient(Configuration(access_token=lineToken)))  # 確認 token 是否正確
+        handler = WebhookHandler(lineSecret)   # 確認 secret 是否正確
         signature = request.headers['X-Line-Signature']
         handler.handle(body, signature)
         if json_data['events'] == []: 
             print('Verify Success')  # Line Bot 驗證成功
             return 'Verify Success'
-        user_question = json_data['events'][0]['message']['text']
-        print("User:",user_question)
         tk = json_data['events'][0]['replyToken']
+        
+        user_question = json_data['events'][0]['message']['text']
+        print(f"🟣 [Msg] {tk[:6]}: {user_question}")
         try:
-            ans = asyncio.run(main(user_question))
+            ans = asyncio.run(askAI(user_question))
             message = [TextMessage(text=ans)]
             messaging_api.reply_message(
                 ReplyMessageRequest(
@@ -55,18 +42,18 @@ def linebot(request):
                     messages=message
                 )
             )
-            print("Message Sent!",tk)
+            print(f"🟣 [Msg] {tk[:6]}: Message Sent! ")
         except Exception as e:
-            print("發生錯誤",traceback.format_exc())
-            error_message = [TextMessage(text="發生錯誤，請稍後再試!")]
+            print(f"🔴 [Error] 發生錯誤\n{traceback.format_exc()}")
+            error_message = [TextMessage(text="發生錯誤，請稍後再試！")]
             messaging_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=tk,
                     messages=error_message
                 )
             )
-            print("Error Message Sent!",tk)
+            print(f"🟣 [Msg] {tk[:6]}: Error Sent!")
     except Exception as e:
-        print("發生錯誤",traceback.format_exc())
+        print(f"🔴 [Error] 發生錯誤\n{traceback.format_exc()}")
         print(request.args)
     return 'OK'

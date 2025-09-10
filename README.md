@@ -97,20 +97,20 @@ FinGPT/
 - **錯誤處理機制**：完善的異常處理與用戶反饋
 - **回應機制**：格式化分析結果並回傳用戶
 
-#### 🔧 `funcTool.py` - 資料工具模組
-- **`get_current_time()`**：取得當前時間資訊
-- **`fetch_stockID()`**：股票名稱轉換為代號
-- **`get_stock_price()`**：抓取股價與籌碼資料
-- **`get_live_price()`**：即時股價資料更新
-- **`get_chip_data()`**：三大法人買賣超資料
-- **`fetch_stock_news()`**：個股新聞資料抓取
-- **`fetch_twii_news()`**：大盤新聞資料抓取
+#### 🔧 `functionTools.py` - 資料工具模組
+- **`askAI()`**：詢問 AI，如有需要會調用下方相關工具
+  - **`toolGetCurrentTime()`**：取得當前時間資訊
+  - **`toolFetchStockInfo()`**：股票名稱
+  - **`toolGetStockPrice()`**：抓取股價與籌碼資料
+  - **`toolFetchStockNews()`**：個股新聞資料抓取
+  - **`toolFetchETFIngredients()`**：ETF成分股抓取
+  - **`toolFetchTwiiNews()`**：大盤新聞資料抓取
 
 ### 🔄 資料流程圖
 ```
 用戶輸入 → LINE Bot → AI Agent → 資料抓取 → 分析處理 → 回應用戶
-    ↓           ↓         ↓         ↓          ↓         ↓
-  自然語言    訊息解析   智慧分析   多源資料    AI整合    格式化回應
+   ↓          ↓         ↓         ↓          ↓ 
+自然語言    訊息解析    智慧分析    多源資料    AI整合
 ```
 
 ## 使用提醒
