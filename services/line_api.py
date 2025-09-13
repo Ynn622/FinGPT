@@ -8,33 +8,38 @@ from linebot.v3.messaging import (
     ReplyMessageRequest,
     TextMessage
 )
-import asyncio
+from fastapi import Request, APIRouter, Header
 import traceback
 import json
 import os
+from dotenv import load_dotenv
 
-from functionTools import askAI   # 引入自定義工具函數
+from services.function_tools import askAI   # 引入自定義工具函數
+
+load_dotenv()  # 讀取 .env 檔案
+
+router = APIRouter(prefix="/api", tags=["LineBot"])
 
 # LineBot 接收&傳送
-def linebot(request):
-    body = request.get_data(as_text=True)
+@router.post('/linebot')
+async def linebot(request: Request, x_line_signature: str = Header(None)):
+    body = (await request.body()).decode("utf-8")
     try:
-        lineToken = os.environ["Line_token"]
-        lineSecret = os.environ["Line_secret"]
+        line_token = os.environ["Line_token"]
+        line_secret = os.environ["Line_secret"]
         json_data = json.loads(body)
-        messaging_api = MessagingApi(ApiClient(Configuration(access_token=lineToken)))  # 確認 token 是否正確
-        handler = WebhookHandler(lineSecret)   # 確認 secret 是否正確
-        signature = request.headers['X-Line-Signature']
-        handler.handle(body, signature)
+        messaging_api = MessagingApi(ApiClient(Configuration(access_token=line_token)))  # 確認 token 是否正確
+        handler = WebhookHandler(line_secret)   # 確認 secret 是否正確
+        handler.handle(body, x_line_signature)
         if json_data['events'] == []: 
             print('Verify Success')  # Line Bot 驗證成功
             return 'Verify Success'
         tk = json_data['events'][0]['replyToken']
         
         user_question = json_data['events'][0]['message']['text']
-        print(f"🟣 [Msg] {tk[:6]}: {user_question}")
+        print(f"🔵 [Receive] {tk[:6]}: {user_question}")
         try:
-            ans = asyncio.run(askAI(user_question))
+            ans = await askAI(user_question)
             message = [TextMessage(text=ans)]
             messaging_api.reply_message(
                 ReplyMessageRequest(
@@ -42,9 +47,9 @@ def linebot(request):
                     messages=message
                 )
             )
-            print(f"🟣 [Msg] {tk[:6]}: Message Sent! ")
+            print(f"🟢 [Send] {tk[:6]} -> Success")
         except Exception as e:
-            print(f"🔴 [Error] 發生錯誤\n{traceback.format_exc()}")
+            print(f"🔴 [Error] AI處理時 發生錯誤\n{traceback.format_exc()}")
             error_message = [TextMessage(text="發生錯誤，請稍後再試！")]
             messaging_api.reply_message(
                 ReplyMessageRequest(
@@ -52,8 +57,7 @@ def linebot(request):
                     messages=error_message
                 )
             )
-            print(f"🟣 [Msg] {tk[:6]}: Error Sent!")
+            print(f"🟠 [Send] {tk[:6]} -> Error")
     except Exception as e:
         print(f"🔴 [Error] 發生錯誤\n{traceback.format_exc()}")
-        print(request.args)
     return 'OK'

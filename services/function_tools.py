@@ -1,8 +1,10 @@
 from agents import function_tool
 from agents import Agent, Runner, function_tool
-import asyncio
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
-from util import *  # 引入 util.py 中的所有輔助函數
+from services.function_util import *  # 引入 util.py 中的所有輔助函數
+from util.logger import log_print
 
 async def askAI(question):
     agent = Agent(
@@ -16,17 +18,17 @@ async def askAI(question):
     return result.final_output
 
 @function_tool
+@log_print
 async def toolGetCurrentTime() -> str:
     """
     取得目前的時間。
     Returns: 
         str: 當前時間的字串，格式為 "YYYY-MM-DD HH:MM:SS"。
     """
-    print("🔵 [FunctionCall] toolGetCurrentTime()")
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+    return datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
 
 @function_tool
+@log_print
 async def toolFetchStockInfo(stockName: str) -> str:
     """
     股票代號&名稱查詢。
@@ -37,16 +39,14 @@ async def toolFetchStockInfo(stockName: str) -> str:
     Example:
         toolFetchStockInfo("鴻海") -> ('2317.TW','鴻海')
     """
-    print(f"🔵 [FunctionCall] toolFetchStockInfo({stockName})")
     try:
         stockID, stockName = fetchStockInfo(stockName)
         return stockID, stockName
     except Exception as e:
-        print(f"🔴 [Error] toolFetchStockInfo({stockName}): {str(e)}")
         return f"Error fetching stock info: {stockName}!"
 
-
 @function_tool
+@log_print
 async def toolGetStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) -> str:
     """
     抓取 Yahoo Finance 的歷史股價資料與籌碼面資料。
@@ -64,15 +64,14 @@ async def toolGetStockPrice(symbol: str, start: str, sdf_indicator_list: list[st
         toolGetStockPrice("2330.TW", "1mo")
         toolGetStockPrice("2330.TW", "2024-01-01", sdf_indicator_list=["close_5_sma", "close_10_ema", "macd", "kdjk", "kdjd", "rsi_5", "rsi_10"])
     """
-    print(f"🔵 [FunctionCall] toolGetStockPrice({symbol}, {start}, sdf_indicator_list: {sdf_indicator_list}")
     try:
         data = getStockPrice(symbol, start, sdf_indicator_list)
         return data.to_string()
     except Exception as e:
-        print(f"🔴 [Error] toolGetStockPrice({symbol}, {start}, sdf_indicator_list: {sdf_indicator_list}): {str(e)}")
         return f"Error fetching data for {symbol}!"
-        
+
 @function_tool
+@log_print
 async def toolFetchStockNews(stock_name: str) -> str:
     """
     爬取指定股票的最新新聞資料。
@@ -83,15 +82,14 @@ async def toolFetchStockNews(stock_name: str) -> str:
     Example:
         toolFetchStockNews("台積電")
     """
-    print(f"🔵 [FunctionCall] toolFetchStockNews({stock_name})")
     try:
         data = FetchStockNews(stock_name)
         return data.to_string()
     except Exception as e:
-        print(f"🔴 [Error] toolFetchStockNews({stock_name}): {str(e)}")
         return f"Error fetching news for {stock_name}"
 
 @function_tool
+@log_print
 async def toolFetchTwiiNews() -> str:
     """
     爬取台灣加權指數(^TWII)與櫃買市場(^TWOII)的最新新聞。
@@ -100,15 +98,14 @@ async def toolFetchTwiiNews() -> str:
     Example:
         toolFetchTwiiNews()
     """
-    print("🔵 [FunctionCall] toolFetchTwiiNews()")
     try:
         data = FetchTwiiNews()
         return data.to_string()
     except Exception as e:
-        print(f"🔴 [Error] toolFetchTwiiNews(): {str(e)}")
         return f"Error fetching TWII news"
 
 @function_tool
+@log_print
 async def toolFetchETFIngredients(ETF_name: str) -> str:
     """
     查詢 ETF 的成分股。
@@ -119,10 +116,8 @@ async def toolFetchETFIngredients(ETF_name: str) -> str:
     Example:
         toolFetchETFIngredients("0050")
     """
-    print(f"🔵 [FunctionCall] toolFetchETFIngredients({ETF_name})")
     try:
         data = fetchETFIngredients(ETF_name)
         return data
     except Exception as e:
-        print(f"🔴 [Error] toolFetchETFIngredients({ETF_name}): {str(e)}")
         return f"Error fetching ETF ingredients for {ETF_name}"

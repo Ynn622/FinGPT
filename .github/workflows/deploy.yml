@@ -1,0 +1,31 @@
+name: Deploy to Hugging Face Spaces
+
+on:
+  push:
+    branches:
+      - main   # 監聽 main 分支推送時觸發
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # 獲取完整的 git 歷史，而不是淺層克隆
+
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          
+          # 為 Hugging Face 準備專門的 README
+          cp README_HF.md README.md
+          git add README.md
+          git commit -m "Update README for Hugging Face deployment" || echo "No changes to commit"
+          
+          git remote add space https://user:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_ID
+          git push space main:main --force

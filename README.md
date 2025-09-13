@@ -1,7 +1,8 @@
 # FinGPT 📈
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10+-blue.svg" alt="Python版本">
+  <img src="https://img.shields.io/badge/Python-3.9+-blue.svg" alt="Python版本">
+  <img src="https://img.shields.io/badge/FastAPI-Framework-green.svg" alt="FastAPI">
   <img src="https://img.shields.io/badge/LineBot-SDK-brightgreen.svg" alt="LINE Bot">
   <img src="https://img.shields.io/badge/OpenAI-GPT--4.1-orange.svg" alt="OpenAI">
 </p>
@@ -40,14 +41,17 @@ FinGPT 是一個基於 LINE Bot 的台股分析工具，結合了 OpenAI GPT-4.1
 
 ## 📋 系統需求
 
-- Python 3.8 或以上版本
-- LINE Developers 帳號
+- Python 3.9 或以上版本
+- LINE Developers 帳號 並取得 Channel Access Token
 - OpenAI API 金鑰
+- Docker (可選，用於容器化部署)
 
 ## 📦 相依套件
 
 | 套件名稱 | 版本 | 用途說明 |
 |---------|------|----------|
+| `fastapi` | latest | 高效能 Web 框架 |
+| `uvicorn` | latest | ASGI 伺服器 |
 | `openai` | latest | OpenAI GPT API 介接 |
 | `openai-agents` | latest | OpenAI Agents 框架 |
 | `line-bot-sdk` | latest | LINE Bot SDK |
@@ -55,8 +59,12 @@ FinGPT 是一個基於 LINE Bot 的台股分析工具，結合了 OpenAI GPT-4.1
 | `beautifulsoup4` | latest | 網頁爬蟲解析 |
 | `lxml` | latest | XML 解析器 |
 | `cloudscraper` | latest | 雲端防護爬蟲 |
-| `pandas` | latest | 資料處理 |
-| `requests` | latest | HTTP 請求 |
+| `stockstats` | latest | 股票技術指標計算 |
+| `pandas` | latest | 資料處理分析 |
+| `numpy` | latest | 數值計算 |
+| `requests` | latest | HTTP 請求處理 |
+| `python-dotenv` | latest | 環境變數管理 |
+| `python-multipart` | latest | 多部分表單處理 |
 
 ## 💬 使用方式
 
@@ -81,37 +89,75 @@ FinGPT 是一個基於 LINE Bot 的台股分析工具，結合了 OpenAI GPT-4.1
 
 ```
 FinGPT/
-├── code/
-│   ├── main.py           # 主程式 - LINE Bot 處理與 AI 整合
-│   ├── funcTool.py       # 工具函數 - 資料抓取與處理
-│   ├── TA.py             # 技術指標函數
-│   └── requirements.txt  # 套件需求清單
-└── README.md             # 專案說明文件
+├── app.py                     # FastAPI 主應用程式
+├── requirements.txt           # 套件需求清單
+├── Dockerfile                 # Docker 容器配置
+├── README.md                  # 專案說明文件
+├── services/                  # 服務層模組
+│   ├── line_api.py           # LINE Bot API 處理
+│   ├── function_tools.py     # AI Agent 工具函數
+│   └── function_util.py      # 資料抓取與處理工具
+└── util/                     # 公用工具模組
+    └── logger.py             # 日誌記錄工具
 ```
 
 ### 🔍 主要模組說明
 
-#### 📄 `main.py` - 核心處理模組
-- **LINE Bot 訊息處理**：接收並解析用戶訊息
-- **OpenAI Agent 整合**：調用 AI 進行股票分析
-- **錯誤處理機制**：完善的異常處理與用戶反饋
-- **回應機制**：格式化分析結果並回傳用戶
+#### 📄 `app.py` - FastAPI 主應用程式
+- **Web 框架**：基於 FastAPI 的高效能 Web 服務
+- **路由管理**：統一管理 API 路由與中介軟體
+- **認證機制**：保護 API 文件的基本認證
+- **CORS 支援**：跨域請求處理
 
-#### 🔧 `functionTools.py` - 資料工具模組
-- **`askAI()`**：詢問 AI，如有需要會調用下方相關工具
-  - **`toolGetCurrentTime()`**：取得當前時間資訊
-  - **`toolFetchStockInfo()`**：股票名稱
-  - **`toolGetStockPrice()`**：抓取股價與籌碼資料
-  - **`toolFetchStockNews()`**：個股新聞資料抓取
-  - **`toolFetchETFIngredients()`**：ETF成分股抓取
-  - **`toolFetchTwiiNews()`**：大盤新聞資料抓取
+#### 📱 `services/line_api.py` - LINE Bot 服務
+- **Webhook 處理**：接收並處理 LINE 平台訊息
+- **訊息回覆**：格式化並回傳分析結果
+- **錯誤處理**：完善的異常處理與用戶反饋
 
-### 🔄 資料流程圖
+#### 🤖 `services/function_tools.py` - AI Agent 工具模組
+- **AI Agent 整合**：整合 OpenAI Agents 框架進行智慧分析
+- **工具函數管理**：提供股票分析所需的各種工具函數
+- **時間處理**：取得當前時間資訊
+- **股票查詢**：股票代號與名稱轉換
+- **新聞抓取**：個股與大盤新聞資料整合
+
+#### 🔧 `services/function_util.py` - 資料處理工具模組
+- **股價資料抓取**：整合 Yahoo Finance 取得歷史股價
+- **技術指標計算**：使用 StockStats 計算各種技術指標
+- **籌碼面資料**：三大法人買賣超資料處理
+- **新聞爬蟲**：多來源新聞資料抓取與解析
+- **ETF 成分股**：ETF 持股明細查詢
+
+#### 🛠️ `util/logger.py` - 日誌工具模組
+- **函數裝飾器**：提供函數調用日誌記錄
+- **錯誤追蹤**：自動記錄函數執行狀態與錯誤資訊
+- **同步/異步支援**：支援一般函數與異步函數的日誌記錄
+
+### 🔄 系統架構流程
 ```
-用戶輸入 → LINE Bot → AI Agent → 資料抓取 → 分析處理 → 回應用戶
-   ↓          ↓         ↓         ↓          ↓ 
-自然語言    訊息解析    智慧分析    多源資料    AI整合
+用戶輸入 → LINE Bot API → AI Agent → 工具函數調用 → 資料處理 → 分析結果 → 回應用戶
+   ↓           ↓            ↓           ↓           ↓         ↓         ↓ 
+自然語言   FastAPI接收   GPT-4.1分析   多源資料抓取  技術指標計算  AI整合分析  格式化回傳
 ```
+
+### 📊 主要工具函數列表
+
+#### 🤖 AI 核心函數
+- **`askAI(question)`**：主要 AI 分析入口，整合所有工具進行股票分析
+
+#### FunctionTool 工具
+- **`toolGetCurrentTime()`**：取得台灣當前時間資訊
+- **`toolFetchStockInfo()`**：股票名稱與代號查詢轉換
+- **`toolGetStockPrice()`**：歷史股價與技術指標資料抓取
+- **`toolFetchStockNews()`**：個股相關新聞資料抓取與分析
+- **`toolFetchTwiiNews()`**：台股大盤新聞資料抓取
+- **`toolFetchETFIngredients()`**：ETF 成分股持股明細查詢
+
+#### 📈 資料處理函數
+- **`fetchStockInfo(stockName)`**：股票基本資訊查詢
+- **`getStockPrice(symbol, start, indicators)`**：股價資料與技術指標計算
+- **`fetchStockNews(stockName)`**：個股新聞爬蟲處理
+- **`fetchTwiiNews()`**：大盤指數新聞抓取
 
 ## 使用提醒
 
