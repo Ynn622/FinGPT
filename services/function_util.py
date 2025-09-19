@@ -9,6 +9,7 @@ import numpy as np
 import re
 import html
 import time
+from util.logger import printf, Color
 
 def fetchStockInfo(stockName: str) -> str:
     """
@@ -46,7 +47,7 @@ def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) ->
         try:
             data = pd.concat([data, indicator_df], axis=1)
         except Exception as e:
-            print(f"🔴 [Error] 指標計算錯誤: {str(e)}")
+            printf(f"🔴 [Error] 指標計算錯誤: {str(e)}", color=Color.RED)
 
     half_year_ago = (datetime.today() - timedelta(days=180)).strftime("%Y-%m-%d")
     start = max(start, half_year_ago)  # 最多取半年
