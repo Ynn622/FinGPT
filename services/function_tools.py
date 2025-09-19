@@ -59,7 +59,7 @@ async def toolGetStockPrice(symbol: str, start: str, sdf_indicator_list: list[st
         start (str): 開始日期（格式："YYYY-MM-DD"），將只返回此日期之後的資料。
         sdf_indicator_list (list[str]): 欲計算的技術指標清單，stockstats - StockDataFrame 的指標名稱。
     Returns:
-        str: 資料表格的字串格式。
+        str: 資料表格的字串，內含股價＆籌碼面＆技術指標資料。
     Example:
         toolGetStockPrice("2330.TW", "1mo")
         toolGetStockPrice("2330.TW", "2024-01-01", sdf_indicator_list=["close_5_sma", "close_10_ema", "macd", "kdjk", "kdjd", "rsi_5", "rsi_10"])
