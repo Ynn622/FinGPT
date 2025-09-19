@@ -54,4 +54,4 @@ def log_print(func):
 
 def printf(*args, color: Color = Color.BLUE, sep=" ", end="\n"):
     message = sep.join(str(arg) for arg in args)
-    print(f"{current_time()} | {color.value}{message}{Color.RESET.value}")
+    print(f"{current_time()} | {color.value}{message}{Color.RESET.value}",end=end)
