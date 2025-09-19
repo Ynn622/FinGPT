@@ -76,6 +76,7 @@ def health_check():
 if __name__ == '__main__':
     import uvicorn
     port = int(os.environ.get("PORT", 7860))  # Hugging Face Spaces 預設使用 7860 port
-    uvicorn.run("app:app", host='0.0.0.0', port=port, reload=False)
+    reload_mode = os.getenv("RELOAD", "false").lower() == "true"
+    uvicorn.run("app:app", host='0.0.0.0', port=port, reload=reload_mode)
     # uvicorn app:app --port 7860 --reload
     # ngrok http 7860
