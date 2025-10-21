@@ -14,6 +14,7 @@ import json
 import os
 from dotenv import load_dotenv
 from util.logger import Log, Color
+import time
 
 from services.function_tools import askAI   # 引入自定義工具函數
 
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/api", tags=["LineBot"])
 # LineBot 接收&傳送
 @router.post('/linebot')
 async def linebot(request: Request, x_line_signature: str = Header(None)):
+    start_time = time.time()
     body = (await request.body()).decode("utf-8")
     try:
         line_token = os.environ["Line_token"]
@@ -36,9 +38,10 @@ async def linebot(request: Request, x_line_signature: str = Header(None)):
             Log('Verify Success', color=Color.YELLOW)  # Line Bot 驗證成功
             return 'Verify Success'
         tk = json_data['events'][0]['replyToken']
+        user_id = json_data['events'][0]['source']['userId']
         
         user_question = json_data['events'][0]['message']['text']
-        Log(f"🔵 [Receive] {tk[:6]}: {user_question}", color=Color.BLUE)
+        Log(f"🔵 [Receive] {user_id[:10]}(Token: {tk[:6]}): {user_question}", color=Color.BLUE)
         try:
             ans = await askAI(user_question)
             message = [TextMessage(text=ans)]
@@ -48,7 +51,7 @@ async def linebot(request: Request, x_line_signature: str = Header(None)):
                     messages=message
                 )
             )
-            Log(f"🟢 [Send] {tk[:6]} -> Success", color=Color.GREEN)
+            Log(f"🟢 [Send] {user_id[:10]}(Token: {tk[:6]}) -> Success (use {time.time() - start_time:.2f}s)", color=Color.GREEN)
         except Exception as e:
             Log(f"🔴 [Error] AI處理時 發生錯誤\n{traceback.format_exc()}", color=Color.RED)
             error_message = [TextMessage(text="發生錯誤，請稍後再試！")]
@@ -58,7 +61,7 @@ async def linebot(request: Request, x_line_signature: str = Header(None)):
                     messages=error_message
                 )
             )
-            Log(f"🟠 [Send] {tk[:6]} -> Error", color=Color.YELLOW)
+            Log(f"🔴 [Send] {user_id[:10]}(Token: {tk[:6]}) -> Error (use {time.time() - start_time:.2f}s)", color=Color.RED)
     except Exception as e:
         Log(f"🔴 [Error] 發生錯誤\n{traceback.format_exc()}", color=Color.RED)
     return 'OK'
