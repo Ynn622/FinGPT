@@ -9,7 +9,7 @@ import numpy as np
 import re
 import html
 import time
-from util.logger import printf, Color
+from util.logger import Log, Color
 
 def fetchStockInfo(stockName: str) -> str:
     """
@@ -41,7 +41,7 @@ def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) ->
         data = data.drop(live_df.index[0], errors='ignore') 
         data = pd.concat([data, live_df])
     except Exception as e:
-        printf(f"🔴 [Error] 爬取即時股價資料錯誤: {str(e)}", color=Color.RED)
+        Log(f"🔴 [Error] 爬取即時股價資料錯誤: {str(e)}", color=Color.RED)
 
     # 指標計算
     if sdf_indicator_list:
@@ -49,7 +49,7 @@ def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) ->
             indicator_df = get_technical_indicators(data, sdf_indicator_list)
             data = pd.concat([data, indicator_df], axis=1)
         except Exception as e:
-            printf(f"🔴 [Error] 指標計算錯誤: {str(e)}", color=Color.RED)
+            Log(f"🔴 [Error] 指標計算錯誤: {str(e)}", color=Color.RED)
 
     half_year_ago = (datetime.today() - timedelta(days=180)).strftime("%Y-%m-%d")
     start = max(start, half_year_ago)  # 最多取半年
@@ -68,7 +68,7 @@ def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) ->
             chip_data = get_chip_data(symbol, data.index[0], data.index[-1]).reindex(data.index)
             data = pd.concat([data, chip_data], axis=1)
         except Exception as e:
-            printf(f"🔴 [Error] 籌碼面資料錯誤: {str(e)}", color=Color.RED)
+            Log(f"🔴 [Error] 籌碼面資料錯誤: {str(e)}", color=Color.RED)
 
     return data
 
@@ -227,7 +227,7 @@ def get_chip_data(symbol: str, start: str, end: str) -> pd.DataFrame:
     getStockPrice() 會自動調用此函數。
     """
     if symbol in ("^TWII", "^TWOII"):
-        printf(f"[function] get_chip_data(): 不提供籌碼面資料: {symbol}", color=Color.PURPLE)
+        Log(f"[function] get_chip_data(): 不提供籌碼面資料: {symbol}", color=Color.PURPLE)
         return pd.DataFrame()
     
     symbol = symbol.split(".")[0]  # 去除後綴
