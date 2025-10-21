@@ -33,7 +33,7 @@ async def linebot(request: Request, x_line_signature: str = Header(None)):
         handler = WebhookHandler(line_secret)   # 確認 secret 是否正確
         handler.handle(body, x_line_signature)
         if json_data['events'] == []: 
-            Log('Verify Success', color=Color.BROWN)  # Line Bot 驗證成功
+            Log('Verify Success', color=Color.YELLOW)  # Line Bot 驗證成功
             return 'Verify Success'
         tk = json_data['events'][0]['replyToken']
         
