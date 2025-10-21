@@ -79,31 +79,34 @@ def FetchStockNews(stock_name: str) -> pd.DataFrame:
     toolFetchStockNews() 會自動調用此函數。
     """
     data = []
-    col = ["Date","Title","Content"]
-    url = f"https://ess.api.cnyes.com/ess/api/v1/news/keyword?q={stock_name}&limit=10&page=1"
-    json_news = requests.get(url).json()['data']['items']
-    for item in json_news:
-        id = item['newsId']
-        title = item['title']
-        title = re.sub(r'<.*?>', '', title)
-        if "盤中速報" in title:continue
-        t = item['publishAt']+28800
-        if time.mktime(time.gmtime())-2592000>t:continue
-        news_time = time.strftime("%Y/%m/%d", time.gmtime(t))
-        news_url = f"https://news.cnyes.com/news/id/{id}"
-        news = requests.get(news_url).text
-        news_bs = bs(news,'html.parser')
-        news_find = news_bs.find("main",class_="c1tt5pk2")
-        news_data = "\n".join(x.text.strip() for x in news_find)
-        news_data = news_data.replace("　　　","").replace("\n\n","")
-        delete_strings = ["歡迎免費訂閱", "精彩影片","粉絲團", "Line ID","Line@","來源："]
-        for delete_str in delete_strings:
-            index = news_data.find(delete_str)
-            if index != -1:
-                news_data = news_data[:index]  # 只保留不包含該字串的部分
-                break
-        data.append([news_time, title, news_data])
-    return pd.DataFrame(data, columns=col)
+    col = ["Date", "URL", "Title", "Content"]
+    stock_id, _ = fetchStockInfo(stock_name)
+    stock_id = stock_id.split(".")[0]  # 去除後綴
+    stock_name = re.sub(r'[-*].*$', '', stock_name)  # 去除股票名稱中的特殊字符
+    
+    url = f"https://udn.com/api/more?page=1&id=search:{stock_name}%20{stock_id}&channelId=2&type=searchword&last_page=100"
+    json_news = requests.get(url).json().get('lists', [])[:10]
+    
+    for i, item in enumerate(json_news):
+        #print(f"抓取新聞中：{stock_name} - Page: 1 - {i+1}/{len(json_news)} ", end="")
+        try:
+            title = item['title']
+            t = item['time']['date']
+            news_time = datetime.strptime(t, "%Y-%m-%d %H:%M")
+            #print(f"日期: {news_time}{' '*30}", end="\r")
+            if time.mktime(time.gmtime())-30*24*3600>news_time.timestamp(): break  # 只抓最近30天的新聞
+            news_url = item['titleLink']
+            if not news_url.startswith("https://udn.com/news/story"): continue   # 非新聞頁面
+            news = requests.get(news_url).text
+            news_find = bs(news,'html.parser').find("section",class_="article-content__editor").find_all("p")[:-1]
+            news_data = "\n".join(x.text.strip() for x in news_find)
+            news_data = news_data.replace("\n\n","\n").strip()
+            data.append([news_time, news_url, title, news_data])
+        except Exception as e:
+            print(f"抓取新聞錯誤：{e}", end="\r")
+            continue
+    
+    return pd.DataFrame(data, columns=col)[["Date", "Title", "Content"]]
 
 def FetchTwiiNews() -> pd.DataFrame:
     """
