@@ -1,30 +1,60 @@
-from agents import function_tool
 from agents import Agent, Runner, function_tool
+from agents.tool import WebSearchTool, UserLocation
+import uuid
 
 from services.function_util import *  # 引入 util.py 中的所有輔助函數
+
 from util.logger import log_print
 from util.nowtime import TaiwanTime
+from util.ai_session import trim_session
 
-async def askAI(question):
-    agent = Agent(
-        name="Finance Agent",
-        model="gpt-5-mini",
-        instructions="你是一名台灣股票分析師，請使用提供的工具，分析股票各面向並給予操作方向＆價位建議。（1.如果查無資料，可嘗試使用工具查詢代碼\n 2.若未提及需要分析的時間&技術指標時，預設為一個月且使用5&10MA，並先查詢今日日期\n 3.若無特別提及分析面向，請查詢股價&新聞）\n4.用簡單、完整又有禮貌的方式回答問題(500字內)",
-        tools=[toolGetCurrentTime, toolQueryStock, toolGetStockPrice, toolFetchStockNews, toolFetchTwiiNews, toolFetchETFIngredients],
-    )
-    result = await Runner.run(agent, question)
-    #print("Agent:",result.final_output)
+class FinAgent(Agent):
+    '''金融分析師 Agent'''
+    def __init__(self, model: str):
+        instructions = (
+            "你是一名台灣股票分析師，請使用提供的工具，分析股票各面向並給予操作方向＆價位建議。"
+            "（1.如果查無資料，可嘗試使用工具查詢代碼\n"
+            f"2.若未提及需要分析的時間&技術指標時，預設為一個月且使用5&10MA，今天是{TaiwanTime.string()}\n"
+            "3.若無特別提及分析面向，請查詢股價&新聞\n"
+            "4.若非股市問題，請禮貌拒絕並告知使用者"
+            "5.用簡單、完整又有禮貌的方式回答問題300字內 ）"
+        )
+        super().__init__(
+            name="Finance Agent",
+            model=model,
+            instructions=instructions,
+            tools=[toolQueryStock, toolGetStockPrice, toolFetchStockNews, toolFetchTwiiNews, toolFetchETFIngredients],
+            handoffs=[WebAgent(model=model)],
+            handoff_description="當使用者的問題是金融相關，且無法從金融分析師 Agent 解決時，才交由 Web Agent 處理。非股票相關問題請直接回覆使用者，不要交給 Web Agent。"
+        )
+
+class WebAgent(Agent):
+    '''Web 搜尋助理 Agent'''
+    def __init__(self, model: str):
+        instructions = "你是一名金融網路搜尋助理，將以禮貌、簡潔的方式整理回應。"
+        super().__init__(
+            name="Web Agent",
+            model=model,
+            instructions=instructions,
+            tools=[WebSearchTool(UserLocation(type="approximate", country="TW"), search_context_size='low')]
+        )
+
+async def ask_AI_Agent(question: str, model: str = "gpt-5-mini", session_id: str = str(uuid.uuid4()) ) -> str:
+    """
+    詢問 AI 並獲得回應。
+    Args:
+        question (str): 使用者的問題。
+        model (str): 使用的 AI 模型名稱。
+        session_id (str): 對話會話的唯一識別碼。
+    Returns:
+        str: AI 的回應內容。
+    """
+    session = await trim_session(session_id)
+    result = await Runner.run(FinAgent(model=model), 
+                              input= question, 
+                              session= session, 
+                              max_turns= 10)
     return result.final_output
-
-@function_tool
-@log_print
-async def toolGetCurrentTime() -> str:
-    """
-    取得目前的時間。
-    Returns: 
-        str: 當前時間的字串，格式為 "YYYY-MM-DD HH:MM:SS"。
-    """
-    return TaiwanTime.string(time=False)
 
 @function_tool
 @log_print

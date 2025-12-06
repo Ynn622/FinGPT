@@ -16,7 +16,7 @@ import time
 from util.config import Env
 from util.logger import Log, Color
 
-from services.function_tools import askAI   # 引入自定義工具函數
+from services.function_tools import ask_AI_Agent   # 引入自定義工具函數
 
 router = APIRouter(prefix="/api", tags=["LineBot"])
 
@@ -41,7 +41,19 @@ async def linebot(request: Request, x_line_signature: str = Header(None)):
         user_question = json_data['events'][0]['message']['text']
         Log(f"[Receive] {user_id[:10]}(Token: {tk[:6]}): {user_question}", color=Color.BLUE)
         try:
-            ans = await askAI(user_question)
+            if user_question == "clear session":
+                from util.ai_session import clear_session
+                await clear_session(user_id)
+                message = [TextMessage(text="已清除對話紀錄！")]
+                messaging_api.reply_message(
+                    ReplyMessageRequest(
+                        reply_token=tk,
+                        messages=message
+                    )
+                )
+                Log(f"[Send] {user_id[:10]}(Token: {tk[:6]}) -> Clear Session (use {time.time() - start_time:.2f}s)", color=Color.GREEN)
+                return 'Clear Session Done!'
+            ans = await ask_AI_Agent(user_question, session_id=user_id)
             message = [TextMessage(text=ans)]
             messaging_api.reply_message(
                 ReplyMessageRequest(
