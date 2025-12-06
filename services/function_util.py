@@ -9,20 +9,9 @@ import numpy as np
 import re
 import html
 import time
+
+from util.stock_list import StockList
 from util.logger import Log, Color
-
-def fetchStockInfo(stockName: str) -> str:
-    """
-    股票代號&名稱查詢。
-    toolFetchStockInfo() 會自動調用此函數。
-    """
-    import requests
-    url = f"https://tw.stock.yahoo.com/_td-stock/api/resource/WaferAutocompleteService;view=wafer&query={stockName}"
-    response = requests.get(url)
-    stockID = bs(response.json()["html"], features="lxml").find("a")["href"].split('stock_id=')[1]
-    stockName = bs(response.json()["html"], features="lxml").find("span").text
-    return stockID, stockName
-
 
 def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) -> pd.DataFrame:
     """
@@ -41,7 +30,7 @@ def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) ->
         data = data.drop(live_df.index[0], errors='ignore') 
         data = pd.concat([data, live_df])
     except Exception as e:
-        Log(f"🔴 [Error] 爬取即時股價資料錯誤: {str(e)}", color=Color.RED)
+        Log(f"[Error] 爬取即時股價資料錯誤: {str(e)}", color=Color.RED)
 
     # 指標計算
     if sdf_indicator_list:
@@ -49,7 +38,7 @@ def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) ->
             indicator_df = get_technical_indicators(data, sdf_indicator_list)
             data = pd.concat([data, indicator_df], axis=1)
         except Exception as e:
-            Log(f"🔴 [Error] 指標計算錯誤: {str(e)}", color=Color.RED)
+            Log(f"[Error] 指標計算錯誤: {str(e)}", color=Color.RED)
 
     half_year_ago = (datetime.today() - timedelta(days=180)).strftime("%Y-%m-%d")
     start = max(start, half_year_ago)  # 最多取半年
@@ -68,7 +57,7 @@ def getStockPrice(symbol: str, start: str, sdf_indicator_list: list[str]=[] ) ->
             chip_data = get_chip_data(symbol, data.index[0], data.index[-1]).reindex(data.index)
             data = pd.concat([data, chip_data], axis=1)
         except Exception as e:
-            Log(f"🔴 [Error] 籌碼面資料錯誤: {str(e)}", color=Color.RED)
+            Log(f"[Error] 籌碼面資料錯誤: {str(e)}", color=Color.RED)
 
     return data
 
@@ -80,7 +69,7 @@ def FetchStockNews(stock_name: str) -> pd.DataFrame:
     """
     data = []
     col = ["Date", "URL", "Title", "Content"]
-    stock_id, _ = fetchStockInfo(stock_name)
+    stock_id, _ = StockList.query_from_yahoo(stock_name)
     stock_id = stock_id.split(".")[0]  # 去除後綴
     stock_name = re.sub(r'[-*].*$', '', stock_name)  # 去除股票名稱中的特殊字符
     

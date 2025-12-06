@@ -1,8 +1,9 @@
 from functools import wraps
 import inspect
-from datetime import datetime
-import pytz
 from enum import Enum
+
+from util.config import Env
+from util.nowtime import TaiwanTime
 
 # === 顏色設定 ===
 class Color(Enum):
@@ -12,46 +13,70 @@ class Color(Enum):
     BLUE = "\033[94m"     # 藍色
     GREEN = "\033[92m"    # 綠色
     YELLOW = "\033[93m"   # 黃色
+    ORANGE = "\033[38;5;208m"   # 橙色
 
-def current_time():
-    # 取得台灣時區
-    taiwan_tz = pytz.timezone("Asia/Taipei")
-    taiwan_now = datetime.now(taiwan_tz)
+# 顏色對應 icon
+ICON_BY_COLOR = {
+    Color.PURPLE: "🟣",
+    Color.RED: "🔴",
+    Color.BLUE: "🔵",
+    Color.GREEN: "🟢",
+    Color.YELLOW: "🟡",
+    Color.ORANGE: "🟠",
+}
 
-    # 格式化：%f 是微秒，取前 3 位數當毫秒
-    formatted_time = taiwan_now.strftime("%Y-%m-%d %H:%M:%S:") + f"{taiwan_now.microsecond // 1000:03d}"
-    return formatted_time
-
+# === 日誌裝飾器 ===
 def log_print(func):
-    if inspect.iscoroutinefunction(func):  # 如果是 async function
+    def build_arg_string(args, kwargs):
+        parts = []
+        if args:
+            parts.append(", ".join(map(str, args)))
+        if kwargs:
+            parts.append(", ".join(f"{k}={v}" for k, v in kwargs.items()))
+        return ", ".join(parts)
+
+    if inspect.iscoroutinefunction(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
             func_name = func.__name__
+            arg_str = build_arg_string(args, kwargs)
             try:
-                arg_str = f"{', '.join(map(str, args))}" if args else ""
-                kwarg_str = f"{kwargs}" if kwargs else ""
-                print(f"{current_time()} | {Color.PURPLE.value}🟣 [FunctionCall] {func_name}({arg_str}{kwarg_str}){Color.RESET.value}")
+                print(f"{TaiwanTime.string(ms=True)} | "
+                      f"{Color.PURPLE.value}🟣 [FunctionCall] {func_name}({arg_str}){Color.RESET.value}")
+
                 return await func(*args, **kwargs)
             except Exception as e:
-                main_arg = args[0] if args else None
-                print(f"{current_time()} | {Color.RED.value}🔴 [Error] {func_name}({main_arg}): {str(e)}{Color.RESET.value}")
+                print(f"{TaiwanTime.string(ms=True)} | "
+                      f"{Color.RED.value}🔴 [Error] {func_name}: {e}{Color.RESET.value}")
                 raise
         return async_wrapper
-    else:  # 如果是普通 def
+    else:
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
             func_name = func.__name__
+            arg_str = build_arg_string(args, kwargs)
             try:
-                arg_str = f"{', '.join(map(str, args))}" if args else ""
-                kwarg_str = f"{kwargs}" if kwargs else ""
-                print(f"{current_time()} | {Color.PURPLE.value}🟣 [Function] {func_name}({arg_str}{kwarg_str}){Color.RESET.value}")
+                print(f"{TaiwanTime.string(ms=True)} | "
+                      f"{Color.BLUE.value}🔵 [Function] {func_name}({arg_str}){Color.RESET.value}")
                 return func(*args, **kwargs)
             except Exception as e:
-                main_arg = args[0] if args else None
-                print(f"{current_time()} | {Color.RED.value}🔴 [Error] {func_name}({main_arg}): {str(e)}{Color.RESET.value}")
+                print(f"{TaiwanTime.string(ms=True)} | "
+                      f"{Color.RED.value}🔴 [Error] {func_name}: {e}{Color.RESET.value}")
                 raise
         return sync_wrapper
 
-def Log(*args, color: Color = Color.BLUE, sep=" ", end="\n"):
+def Log(*args, color: Color = Color.BLUE, sep=" ", end="\n", reload_only: bool = False):
+    """
+    印出帶有時間戳記與顏色的日誌訊息。
+    Args:
+        *args: 要印出的訊息內容。
+        color (Color): 訊息顏色，預設為藍色。
+        sep (str): 訊息間的分隔符號，預設為空格。
+        end (str): 訊息結尾的字元，預設為換行符號。
+        reload_only (bool): 是否僅在 Env.RELOAD=True 時印出訊息，預設為 False。
+    """
+    if reload_only and not Env.RELOAD:
+        return
+    icon = ICON_BY_COLOR.get(color, "")
     message = sep.join(str(arg) for arg in args)
-    print(f"{current_time()} | {color.value}{message}{Color.RESET.value}",end=end)
+    print(f"{TaiwanTime.string(ms=True)} | {icon} {color.value}{message}{Color.RESET.value}", end=end)

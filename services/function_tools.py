@@ -1,17 +1,16 @@
 from agents import function_tool
 from agents import Agent, Runner, function_tool
-from zoneinfo import ZoneInfo
-from datetime import datetime
 
 from services.function_util import *  # 引入 util.py 中的所有輔助函數
 from util.logger import log_print
+from util.nowtime import TaiwanTime
 
 async def askAI(question):
     agent = Agent(
         name="Finance Agent",
         model="gpt-5-mini",
         instructions="你是一名台灣股票分析師，請使用提供的工具，分析股票各面向並給予操作方向＆價位建議。（1.如果查無資料，可嘗試使用工具查詢代碼\n 2.若未提及需要分析的時間&技術指標時，預設為一個月且使用5&10MA，並先查詢今日日期\n 3.若無特別提及分析面向，請查詢股價&新聞）\n4.用簡單、完整又有禮貌的方式回答問題(500字內)",
-        tools=[toolGetCurrentTime, toolFetchStockInfo, toolGetStockPrice, toolFetchStockNews, toolFetchTwiiNews, toolFetchETFIngredients],
+        tools=[toolGetCurrentTime, toolQueryStock, toolGetStockPrice, toolFetchStockNews, toolFetchTwiiNews, toolFetchETFIngredients],
     )
     result = await Runner.run(agent, question)
     #print("Agent:",result.final_output)
@@ -25,25 +24,26 @@ async def toolGetCurrentTime() -> str:
     Returns: 
         str: 當前時間的字串，格式為 "YYYY-MM-DD HH:MM:SS"。
     """
-    return datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y-%m-%d %H:%M:%S")
+    return TaiwanTime.string(time=False)
 
 @function_tool
 @log_print
-async def toolFetchStockInfo(stockName: str) -> str:
+async def toolQueryStock(keyword: str) -> str:
     """
     股票代號&名稱查詢。
     Args:
-        stockName (str): 股票名稱或代碼，例如 "鴻海" 或 "2317"。
+        keyword (str): 股票名稱或代碼，例如 "鴻海" 或 "2317"。
     Returns:
         str: 包含股票代號與名稱的字串。
     Example:
-        toolFetchStockInfo("鴻海") -> ('2317.TW','鴻海')
+        toolQueryStock("鴻海") -> ('2317.TW','鴻海')
     """
+    from util.stock_list import StockList
     try:
-        stockID, stockName = fetchStockInfo(stockName)
+        stockID, stockName = StockList.query(keyword)
         return stockID, stockName
     except Exception as e:
-        return f"Error fetching stock info: {stockName}!"
+        return f"Error query stock info: {keyword}!"
 
 @function_tool
 @log_print
