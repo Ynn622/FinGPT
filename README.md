@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/Python-3.9+-blue.svg" alt="Python版本">
   <img src="https://img.shields.io/badge/FastAPI-Framework-green.svg" alt="FastAPI">
   <img src="https://img.shields.io/badge/LineBot-SDK-brightgreen.svg" alt="LINE Bot">
-  <img src="https://img.shields.io/badge/OpenAI-GPT--4.1-orange.svg" alt="OpenAI">
+  <img src="https://img.shields.io/badge/OpenAI-GPT--5.1-orange.svg" alt="OpenAI">
 </p>
 
 <p align="center">
@@ -13,11 +13,11 @@
 
 歡迎使用 FinGPT！一個結合 ChatGPT 與台股分析的智慧投資助手 🤖
 
-FinGPT 是一個基於 LINE Bot 的台股分析工具，結合了 OpenAI GPT-4.1 的強大語言理解能力和豐富的股市數據源，為投資者提供即時、準確的股票分析和投資建議。
+FinGPT 是一個基於 LINE Bot 的台股分析工具，結合了 OpenAI GPT 的強大語言理解能力和豐富的股市數據源，為投資者提供即時、準確的股票分析和投資建議。
 
 ## ✨ 主要特色
 
-- 🤖 **AI 智慧分析**：採用 GPT-4.1 進行股票技術面與基本面分析
+- 🤖 **AI 智慧分析**：採用 GPT 進行股票技術面與基本面分析
 - 📊 **即時股價資料**：整合 Yahoo Finance 提供最新股價資訊
 - 📰 **新聞資訊整合**：自動抓取相關股票新聞進行分析
 - 💹 **籌碼面分析**：提供三大法人買賣超資料
@@ -137,7 +137,7 @@ FinGPT/
 ```
 用戶輸入 → LINE Bot API → AI Agent → 工具函數調用 → 資料處理 → 分析結果 → 回應用戶
    ↓           ↓            ↓           ↓           ↓         ↓         ↓ 
-自然語言   FastAPI接收   GPT-4.1分析   多源資料抓取  技術指標計算  AI整合分析  格式化回傳
+自然語言   FastAPI接收   GPT 分析   多源資料抓取  技術指標計算  AI整合分析  格式化回傳
 ```
 
 ### 📊 主要工具函數列表
