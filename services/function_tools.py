@@ -7,17 +7,18 @@ from services.function_util import *  # 引入 util.py 中的所有輔助函數
 from util.logger import log_print
 from util.nowtime import TaiwanTime
 from util.ai_session import trim_session
+from util.config import Env
 
 class FinAgent(Agent):
     '''金融分析師 Agent'''
     def __init__(self, model: str):
         instructions = (
-            "你是一名台灣股票分析師，請使用提供的工具，分析股票各面向並給予操作方向＆價位建議。"
+            "你是一名台灣股票分析師，請使用提供的工具，分析股票各面向並給予操作方向＆價位建議。首次詢問時,先詢問使用者的風險偏好再進行分析。"
             "（1.如果查無資料，可嘗試使用工具查詢代碼\n"
             f"2.若未提及需要分析的時間&技術指標時，預設為一個月且使用5&10MA，今天是{TaiwanTime.string()}\n"
             "3.若無特別提及分析面向，請查詢股價&新聞\n"
             "4.若非股市問題，請禮貌拒絕並告知使用者"
-            "5.用簡單、完整又有禮貌的方式回答問題300字內 ）"
+            "5.用簡潔重點的方式 500字內回答問題 ）"
         )
         super().__init__(
             name="Finance Agent",
@@ -39,7 +40,7 @@ class WebAgent(Agent):
             tools=[WebSearchTool(UserLocation(type="approximate", country="TW"), search_context_size='low')]
         )
 
-async def ask_AI_Agent(question: str, model: str = "gpt-5-mini", session_id: str = str(uuid.uuid4()) ) -> str:
+async def ask_AI_Agent(question: str, model: str = Env.AI_MODEL, session_id: str = str(uuid.uuid4()) ) -> str:
     """
     詢問 AI 並獲得回應。
     Args:
@@ -51,10 +52,10 @@ async def ask_AI_Agent(question: str, model: str = "gpt-5-mini", session_id: str
     """
     session = await trim_session(session_id)
     result = await Runner.run(FinAgent(model=model), 
-                              input= question, 
+                              input= question+"(回答時，請簡潔重點即可)", 
                               session= session, 
                               max_turns= 10)
-    return result.final_output
+    return result.final_output.replace("#","").replace("**","*").strip()
 
 @function_tool
 @log_print

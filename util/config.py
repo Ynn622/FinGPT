@@ -11,8 +11,9 @@ class Env:
     LINE_SECRET: str = os.getenv("LINE_SECRET", "")
     DOCS_PASSWORD: str = os.getenv("DOCS_PASSWORD", "")
     DOCS_USERNAME: str = os.getenv("DOCS_USERNAME", "")
+    AI_MODEL: str = os.getenv("AI_MODEL", "gpt-5-mini")
     RELOAD: bool = os.getenv("RELOAD", "").lower() == "true"
-    SESSION_MAX_ITEMS: int = int(os.getenv("SESSION_MAX_ITEMS", 3))
+    SESSION_MAX_ITEMS: int = int(os.getenv("SESSION_MAX_ITEMS", 4))
     PORT: int = int(os.getenv("PORT", 7860))    # Hugging Face Spaces 預設使用 7860 port
     
 env = Env()
