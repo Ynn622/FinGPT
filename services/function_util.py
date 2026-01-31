@@ -9,6 +9,7 @@ import numpy as np
 import re
 import html
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from util.stock_list import StockList
 from util.logger import Log, Color
@@ -67,6 +68,28 @@ def FetchStockNews(stock_name: str) -> pd.DataFrame:
     爬取指定股票的最新新聞資料。
     toolFetchStockNews() 會自動調用此函數。
     """
+    def fetch_single_news(item):
+        """並行處理單個新聞項目"""
+        try:
+            title = item['title']
+            t = item['time']['date']
+            news_time = datetime.strptime(t, "%Y-%m-%d %H:%M")
+            
+            # 只抓最近30天的新聞
+            if time.mktime(time.gmtime())-30*24*3600>news_time.timestamp(): return None
+            news_url = item['titleLink']
+            if not news_url.startswith("https://udn.com/news/story"): return None  # 非新聞頁面
+            
+            news = requests.get(news_url, timeout=10).text
+            news_find = bs(news,'html.parser').find("section",class_="article-content__editor").find_all("p")[:-1]
+            news_data = "\n".join(x.text.strip() for x in news_find)
+            news_data = news_data.replace("\n\n","\n").strip()
+            
+            return [news_time, news_url, title, news_data]
+        except Exception as e:
+            print(f"抓取新聞錯誤：{e}", end="\r")
+            return None
+    
     data = []
     col = ["Date", "URL", "Title", "Content"]
     stock_id, _ = StockList.query_from_yahoo(stock_name)
@@ -76,26 +99,17 @@ def FetchStockNews(stock_name: str) -> pd.DataFrame:
     url = f"https://udn.com/api/more?page=1&id=search:{stock_name}%20{stock_id}&channelId=2&type=searchword&last_page=100"
     json_news = requests.get(url).json().get('lists', [])[:10]
     
-    for i, item in enumerate(json_news):
-        #print(f"抓取新聞中：{stock_name} - Page: 1 - {i+1}/{len(json_news)} ", end="")
-        try:
-            title = item['title']
-            t = item['time']['date']
-            news_time = datetime.strptime(t, "%Y-%m-%d %H:%M")
-            #print(f"日期: {news_time}{' '*30}", end="\r")
-            if time.mktime(time.gmtime())-30*24*3600>news_time.timestamp(): break  # 只抓最近30天的新聞
-            news_url = item['titleLink']
-            if not news_url.startswith("https://udn.com/news/story"): continue   # 非新聞頁面
-            news = requests.get(news_url).text
-            news_find = bs(news,'html.parser').find("section",class_="article-content__editor").find_all("p")[:-1]
-            news_data = "\n".join(x.text.strip() for x in news_find)
-            news_data = news_data.replace("\n\n","\n").strip()
-            data.append([news_time, news_url, title, news_data])
-        except Exception as e:
-            print(f"抓取新聞錯誤：{e}", end="\r")
-            continue
+    # 使用線程池並行處理新聞
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(fetch_single_news, item): item for item in json_news}
+        
+        for future in as_completed(futures):
+            result = future.result()
+            if result is not None:
+                data.append(result)
     
-    return pd.DataFrame(data, columns=col)[["Date", "Title", "Content"]]
+    df = pd.DataFrame(data, columns=col)[["Date", "Title", "Content"]]
+    return df.sort_values(by="Date", ascending=False).reset_index(drop=True)
 
 def FetchTwiiNews() -> pd.DataFrame:
     """
