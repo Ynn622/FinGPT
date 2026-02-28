@@ -131,12 +131,14 @@ class StockList:
         if not keyword:
             return stockID, stockName
         try:
-            url = f"https://tw.stock.yahoo.com/_td-stock/api/resource/WaferAutocompleteService;view=wafer&query={keyword}"
-            response = requests.get(url)
-            stockID = bs(response.json()["html"], features="lxml").find("a")["href"].split('stock_id=')[1]
-            stockName = bs(response.json()["html"], features="lxml").find("span").text
+            url = f"https://tw.stock.yahoo.com/stock_ms/_td-stock/api/resource/AutocompleteService;query={keyword}"
+            header = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
+            response = requests.get(url, headers=header)
+            stockID = response.json()["ResultSet"]["Result"][0]["symbol"]
+            stockName = response.json()["ResultSet"]["Result"][0]["name"]
         except Exception as e:
-            Log(f"[StockList] Yahoo 查詢失敗: {e}", color=Color.RED)
+            Log(f"[StockList] Yahoo 查詢失敗: {e}，將使用本地快取查詢", color=Color.RED)
+            stockID, stockName = cls.query(keyword)  # fallback 到本地快取查詢
         return stockID, stockName
 
 StockList._ensure_cache()  # 初始化快取
