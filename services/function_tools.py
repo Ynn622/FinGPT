@@ -34,7 +34,7 @@ class WebAgent(Agent):
     def __init__(self, model: str):
         instructions = "你是一名金融網路搜尋助理，將以禮貌、簡潔的方式整理回應。"
         super().__init__(
-            name="Web Agent",
+            name="Web_Agent",
             model=model,
             instructions=instructions,
             tools=[WebSearchTool(UserLocation(type="approximate", country="TW"), search_context_size='low')]
