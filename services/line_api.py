@@ -17,7 +17,7 @@ from util.config import Env
 from util.logger import Log, Color
 
 from services.function_tools import ask_AI_Agent   # 引入自定義工具函數
-from services.morning.subscribers import subscribe_morning_alert
+from services.morning.subscribers import subscribe_morning_alert, unsubscribe_morning_alert
 
 router = APIRouter(prefix="/api", tags=["LineBot"])
 
@@ -42,13 +42,21 @@ async def linebot(request: Request, x_line_signature: str = Header(None)):
         user_question = json_data['events'][0]['message']['text']
         Log(f"[Receive] {user_id[:10]}(Token: {replyToken[:6]}): {user_question}", color=Color.BLUE)
         try:
-            if user_question.strip().lower() == "/morning-alert-on":
+            command = user_question.strip().lower()
+            if command == "/morning-alert-on":
                 added = subscribe_morning_alert(user_id)
                 reply = "早盤推播已開啟！之後將於交易日早盤收到通知。" if added else "早盤推播已經是開啟狀態。"
                 send_reply_message(messaging_api, replyToken, reply)
                 status = "Subscribed" if added else "Already subscribed"
                 Log(f"[Morning] {user_id[:10]} -> {status}", color=Color.GREEN)
                 return 'Morning Alert Enabled!'
+            if command == "/morning-alert-off":
+                removed = unsubscribe_morning_alert(user_id)
+                reply = "早盤推播已關閉，之後不會再收到早盤通知。" if removed else "早盤推播已經是關閉狀態。"
+                send_reply_message(messaging_api, replyToken, reply)
+                status = "Unsubscribed" if removed else "Already unsubscribed"
+                Log(f"[Morning] {user_id[:10]} -> {status}", color=Color.GREEN)
+                return 'Morning Alert Disabled!'
             if user_question == "clear session":
                 from util.ai_session import clear_session
                 await clear_session(user_id)

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -568,6 +569,17 @@ class MorningSubscriberTests(unittest.TestCase):
                 self.assertEqual(subscribers.morning_alert_user_ids(), ["U123"])
                 self.assertEqual(json.loads(whitelist.read_text())["user_ids"], ["U123"])
 
+    def test_unsubscribe_removes_user_and_is_idempotent(self):
+        """取消訂閱應移除 LINE user ID，重複取消不應改寫其他使用者。"""
+        with tempfile.TemporaryDirectory() as directory:
+            whitelist = Path(directory) / "whitelist.json"
+            with patch.object(subscribers, "MORNING_ALERT_WHITELIST", whitelist):
+                subscribers.subscribe_morning_alert("U123")
+                subscribers.subscribe_morning_alert("U456")
+                self.assertTrue(subscribers.unsubscribe_morning_alert("U123"))
+                self.assertFalse(subscribers.unsubscribe_morning_alert("U123"))
+                self.assertEqual(subscribers.morning_alert_user_ids(), ["U456"])
+
     def test_multicast_skips_empty_whitelist(self):
         """沒有訂閱者時不得呼叫 LINE API。"""
         payload = {
@@ -633,6 +645,79 @@ class MorningWebhookTests(unittest.IsolatedAsyncioTestCase):
             "早盤推播已開啟！之後將於交易日早盤收到通知。",
         )
         ask_ai.assert_not_awaited()
+
+    async def test_off_command_unsubscribes_and_does_not_call_ai(self):
+        """取消指令應移除來源帳號、回覆確認，且不進入 AI 對話。"""
+        from services.line_api import linebot
+
+        request = AsyncMock()
+        request.body.return_value = json.dumps({
+            "events": [{
+                "replyToken": "reply-token",
+                "source": {"userId": "U123"},
+                "message": {"text": "/morning-alert-off"},
+            }],
+        }).encode("utf-8")
+        messaging_api = MagicMock()
+        with patch("services.line_api.WebhookHandler") as handler, \
+             patch("services.line_api.ApiClient"), \
+             patch("services.line_api.MessagingApi", return_value=messaging_api), \
+             patch("services.line_api.unsubscribe_morning_alert", return_value=True) as unsubscribe, \
+             patch("services.line_api.send_reply_message") as reply, \
+             patch("services.line_api.ask_AI_Agent", new_callable=AsyncMock) as ask_ai:
+            result = await linebot(request, "valid-signature")
+
+        self.assertEqual(result, "Morning Alert Disabled!")
+        handler.return_value.handle.assert_called_once()
+        unsubscribe.assert_called_once_with("U123")
+        reply.assert_called_once_with(
+            messaging_api,
+            "reply-token",
+            "早盤推播已關閉，之後不會再收到早盤通知。",
+        )
+        ask_ai.assert_not_awaited()
+
+
+class MorningPushApiTests(unittest.IsolatedAsyncioTestCase):
+    def test_manual_push_route_requires_basic_auth(self):
+        """手動推播端點必須是 POST，並套用 HTTP Basic dependency。"""
+        from app import app
+
+        route = next(route for route in app.routes if route.path == "/api/morning/push")
+        self.assertEqual(route.methods, {"POST"})
+        self.assertTrue(route.dependant.dependencies)
+
+    async def test_manual_push_runs_pipeline_with_force_and_returns_count(self):
+        """手動 API 應將 force 傳入 Pipeline，並回傳白名單人數。"""
+        from app import push_morning_report
+
+        report = SimpleNamespace(report_date="2026-08-30")
+        credentials = MagicMock()
+        with patch("app.Env.MORNING_PUSH_ENABLED", True), \
+             patch("app.Env.LINE_TOKEN", "token"), \
+             patch("app.morning_alert_user_ids", return_value=["U1", "U2"]), \
+             patch("app.run_morning_pipeline", new_callable=AsyncMock, return_value=report) as pipeline:
+            result = await push_morning_report(force=True, credentials=credentials)
+
+        pipeline.assert_awaited_once_with(push=True, force=True)
+        self.assertEqual(result, {
+            "status": "completed",
+            "report_date": "2026-08-30",
+            "recipients": 2,
+            "force": True,
+        })
+
+    async def test_manual_push_rejects_empty_whitelist(self):
+        """白名單為空時 API 應中止，不執行昂貴的盤前流程。"""
+        from app import push_morning_report
+
+        with patch("app.Env.MORNING_PUSH_ENABLED", True), \
+             patch("app.Env.LINE_TOKEN", "token"), \
+             patch("app.morning_alert_user_ids", return_value=[]), \
+             patch("app.run_morning_pipeline", new_callable=AsyncMock) as pipeline:
+            with self.assertRaisesRegex(Exception, "早盤推播白名單目前為空"):
+                await push_morning_report(force=False, credentials=MagicMock())
+        pipeline.assert_not_awaited()
 
 
 if __name__ == "__main__":

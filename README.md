@@ -194,7 +194,7 @@ FinGPT/
 
 ## Morning Report V1
 
-每日台股交易日 07:00（Asia/Taipei）開始執行盤前流程，完成後立即以三則獨立 LINE Flex Message multicast 給訂閱白名單：盤前總覽單張 GIGA Bubble、當沖 Carousel、波段 Carousel。使用者傳送 `/morning-alert-on` 給 LINE Bot 即可加入白名單。功能包含全市場成交金額 Top100、當沖 Top5、波段 Top5、海外市場（含費城半導體）與台指期夜盤情境，以及 OpenAI mini 摘要。推薦數不足門檻時不會硬湊。
+每日台股交易日 07:00（Asia/Taipei）開始執行盤前流程，完成後立即以三則獨立 LINE Flex Message multicast 給訂閱白名單：盤前總覽單張 GIGA Bubble、當沖 Carousel、波段 Carousel。使用者傳送 `/morning-alert-on` 給 LINE Bot 即可加入白名單，傳送 `/morning-alert-off` 則移除訂閱。功能包含全市場成交金額 Top100、當沖 Top5、波段 Top5、海外市場（含費城半導體）與台指期夜盤情境，以及 OpenAI mini 摘要。推薦數不足門檻時不會硬湊。
 
 ```text
 Official datasource → Scanner → Technical features → Risk filter
@@ -240,6 +240,13 @@ python -m services.morning.run --no-push
 
 ```bash
 python -m services.morning.run --push --force
+```
+
+也可使用與 `/docs` 相同的 HTTP Basic 帳密呼叫手動推播 API。預設保留交易日與當日防重複檢查；測試時可加上 `force=true`：
+
+```bash
+curl -u "$DOCS_USERNAME:$DOCS_PASSWORD" -X POST \
+  "http://localhost:7860/api/morning/push?force=true"
 ```
 
 產出位於 `data/output/morning_report_YYYY-MM-DD.json` 與 `morning_flex_YYYY-MM-DD.json`；後者可貼到 LINE Flex Message Simulator。訂閱白名單存放於已被 Git 排除的 `data/cache/morning_alert_whitelist.json`；成功 multicast 後才會 atomic 更新 `data/cache/morning_push_state.json`，白名單為空時不會標記成功。

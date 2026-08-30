@@ -36,3 +36,21 @@ def subscribe_morning_alert(user_id: str) -> bool:
             {"user_ids": sorted(user_ids)},
         )
     return True
+
+
+def unsubscribe_morning_alert(user_id: str) -> bool:
+    """將 LINE user ID 原子移出白名單；原先有訂閱時回傳 True。"""
+    normalized = user_id.strip() if isinstance(user_id, str) else ""
+    if not normalized:
+        raise ValueError("LINE user ID is required")
+
+    with _WHITELIST_LOCK:
+        user_ids = set(morning_alert_user_ids())
+        if normalized not in user_ids:
+            return False
+        user_ids.remove(normalized)
+        cache.atomic_write_json(
+            MORNING_ALERT_WHITELIST,
+            {"user_ids": sorted(user_ids)},
+        )
+    return True
