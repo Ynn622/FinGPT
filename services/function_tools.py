@@ -2,16 +2,19 @@ from agents import Agent, Runner, function_tool
 from agents.tool import WebSearchTool, UserLocation
 import uuid
 
-from services.function_util import *  # 引入 util.py 中的所有輔助函數
+from crawler.etf import fetchETFIngredients
+from crawler.news import FetchStockNews, FetchTwiiNews
+from crawler.stock import getStockPrice
 
 from util.logger import log_print
-from util.nowtime import TaiwanTime
+from util.taiwan_time import TaiwanTime
 from util.ai_session import trim_session
 from util.config import Env
 
 class FinAgent(Agent):
     '''金融分析師 Agent'''
     def __init__(self, model: str):
+        """建立具備金融工具與網路搜尋交接能力的分析 Agent。"""
         instructions = (
             "你是一名台灣股票分析師，請使用提供的工具，分析股票各面向並給予操作方向＆價位建議。首次詢問時,先詢問使用者的風險偏好再進行分析。"
             "（1.如果查無資料，可嘗試使用工具查詢代碼\n"
@@ -32,6 +35,7 @@ class FinAgent(Agent):
 class WebAgent(Agent):
     '''Web 搜尋助理 Agent'''
     def __init__(self, model: str):
+        """建立專門處理金融網路搜尋的 Agent。"""
         instructions = "你是一名金融網路搜尋助理，將以禮貌、簡潔的方式整理回應。"
         super().__init__(
             name="Web_Agent",
@@ -69,7 +73,7 @@ async def toolQueryStock(keyword: str) -> str:
     Example:
         toolQueryStock("鴻海") -> ('2317.TW','鴻海')
     """
-    from util.stock_list import StockList
+    from crawler.stock_list import StockList
     try:
         stockID, stockName = StockList.query(keyword)
         return stockID, stockName

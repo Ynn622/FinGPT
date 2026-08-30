@@ -10,3 +10,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 python-dotenv
+APScheduler
+pandas
+numpy
+requests

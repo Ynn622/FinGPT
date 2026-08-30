@@ -3,3 +3,6 @@ __pycache__/
 .env
 /Logo.png
 conversations.db*
+/data/cache/*
+/data/output/*
+.vscode/

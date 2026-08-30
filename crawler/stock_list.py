@@ -1,7 +1,6 @@
 from typing import Optional
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup as bs
 
 from util.logger import Log, Color
 
@@ -19,12 +18,7 @@ class StockList:
 
     @classmethod
     def _download(cls) -> pd.DataFrame:
-        """
-        下載股票列表，包含上市和上櫃股票。
-
-        Returns:
-            pd.DataFrame: 股票列表，包含 stock_id, stock_name, type 三個欄位
-        """
+        """下載上市與上櫃股票清單並整理成統一格式。"""
         twse_df = pd.read_csv(cls.TWSE_URL, dtype=str)
         tpex_df = pd.read_csv(cls.TPEX_URL, dtype=str)
 
@@ -68,15 +62,7 @@ class StockList:
 
     @classmethod
     def query(cls, keyword: str) -> tuple[str, str]:
-        """
-        「查詢」公司代號 or 公司簡稱搜尋，回傳符合的 (stock_id, stock_name)。
-        
-        ⚠️ 先完全比對，找不到再模糊搜尋。
-        Args:
-            keyword: 公司代號 or 公司簡稱
-        Returns:
-            tuple: (stock_id, stock_name)，找不到則回傳 (None, None)
-        """
+        """依公司代號或簡稱精確查詢，找不到時改用模糊搜尋。"""
         df = cls._ensure_cache()
         keyword = str(keyword).strip()
         if not keyword: return None, None
@@ -97,13 +83,7 @@ class StockList:
     
     @classmethod
     def fuzzy_query(cls, keyword: str) -> tuple[str, str]:
-        """
-        「模糊搜尋」公司代號前綴 or 公司簡稱包含關鍵字，回傳符合的第一筆 (stock_id, stock_name)。
-        Args:
-            keyword: 公司代號前綴 or 公司關鍵字
-        Returns:
-            tuple: (stock_id, stock_name)，找不到則回傳 (None, None)
-        """
+        """依股票代號前綴或公司名稱關鍵字回傳第一筆結果。"""
         df = cls._ensure_cache()
 
         # stock_id 前綴搜尋 
@@ -122,11 +102,7 @@ class StockList:
 
     @classmethod
     def query_from_yahoo(cls, keyword: str) -> tuple[str, str]:
-        """
-        透過 Yahoo Finance 的搜尋欄 API 查詢，回傳 (stock_id, stock_name)。
-        
-        ⚠️ 不使用本地快取，專為補充查詢用。
-        """
+        """透過 Yahoo Finance 搜尋股票並在失敗時改查本地清單。"""
         stockID, stockName = None, None
         if not keyword:
             return stockID, stockName
@@ -140,5 +116,3 @@ class StockList:
             Log(f"[StockList] Yahoo 查詢失敗: {e}，將使用本地快取查詢", color=Color.RED)
             stockID, stockName = cls.query(keyword)  # fallback 到本地快取查詢
         return stockID, stockName
-
-StockList._ensure_cache()  # 初始化快取

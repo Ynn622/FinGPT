@@ -4,10 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
+from contextlib import asynccontextmanager
 import secrets
 
 from services.line_api import router as linebot_router
 from util.config import Env
+from services.morning.scheduler import start_scheduler, stop_scheduler
 
 # 初始化 HTTPBasic 認證
 security = HTTPBasic()
@@ -28,11 +30,22 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials
 
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """管理應用程式啟動與關閉期間的排程器生命週期。"""
+    start_scheduler()
+    try:
+        yield
+    finally:
+        stop_scheduler()
+
+
 app = FastAPI(
     title="FinGPT API",
     docs_url=None,  # 停用預設的 docs
     redoc_url=None,  # 停用預設的 redoc
-    openapi_url=None  # 停用預設的 openapi.json
+    openapi_url=None,  # 停用預設的 openapi.json
+    lifespan=lifespan,
 )
 
 app.add_middleware(

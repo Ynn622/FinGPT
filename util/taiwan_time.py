@@ -43,3 +43,16 @@ class TaiwanTime:
         else:
             # YYYY-MM-DD HH:MM:SS
             return base_time
+
+    @staticmethod
+    def roc_date(value: object) -> str:
+        """將民國年或西元年日期轉換成 YYYY-MM-DD 格式。"""
+        text = str(value).strip().replace("/", "").replace("-", "")
+        if len(text) == 7 and text.isdigit():
+            return f"{int(text[:3]) + 1911:04d}-{text[3:5]}-{text[5:]}"
+        if len(text) == 8 and text.isdigit():
+            return f"{text[:4]}-{text[4:6]}-{text[6:]}"
+        try:
+            return datetime.fromisoformat(str(value)).date().isoformat()
+        except ValueError:
+            return str(value)

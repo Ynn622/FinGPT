@@ -3,7 +3,7 @@ import inspect
 from enum import Enum
 
 from util.config import Env
-from util.nowtime import TaiwanTime
+from util.taiwan_time import TaiwanTime
 
 # === 顏色設定 ===
 class Color(Enum):
@@ -27,7 +27,9 @@ ICON_BY_COLOR = {
 
 # === 日誌裝飾器 ===
 def log_print(func):
+    """裝飾函式並記錄呼叫參數、成功結果與例外。"""
     def build_arg_string(args, kwargs):
+        """將位置參數與關鍵字參數組合成日誌字串。"""
         parts = []
         if args:
             parts.append(", ".join(map(str, args)))
@@ -38,6 +40,7 @@ def log_print(func):
     if inspect.iscoroutinefunction(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
+            """包裝非同步函式並輸出執行日誌。"""
             func_name = func.__name__
             arg_str = build_arg_string(args, kwargs)
             try:
@@ -53,6 +56,7 @@ def log_print(func):
     else:
         @wraps(func)
         def sync_wrapper(*args, **kwargs):
+            """包裝同步函式並輸出執行日誌。"""
             func_name = func.__name__
             arg_str = build_arg_string(args, kwargs)
             try:
